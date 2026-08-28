@@ -1,0 +1,167 @@
+# llm-wiki
+
+> 个人全局知识工作台：任何 AI 编码工具、在任何项目里沉淀的经验，都汇入你的同一份 Wiki，并自动提交上传。
+
+适用于 Claude Code、Codex、Cursor、OpenCode、Gemini CLI、DeepSeek Harness 等支持用户级规则文件的编码 Agent。思想承 [Karpathy LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)（原料与编译知识分层，ingest / query / lint 三环维护），并在其上扩展了**全局化**（跨项目、跨工具共用一份）、**多项目分区**、**私有区**与 **learning 学习模块**（第四环）。
+
+- [为什么需要它](#为什么需要它) · [快速开始](#快速开始) · [工作原理](#工作原理) · [日常使用](#日常使用) · [工具兼容性](#工具兼容性) · [目录结构](#目录结构) · [模板升级](#模板升级与维护) · [FAQ](#设计决策faq)
+
+## 为什么需要它
+
+编码 Agent 的知识默认锁在单个项目、单次会话里：换一个项目，上次排障的结论重新踩坑；换一个工具，积累的上下文全部归零；人离开，经验随之消失。把 Wiki 绑在某个项目仓库下只解决「单项目内跨会话」，解决不了「跨项目、跨工具」。
+
+llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现的个人工作台**：所有工具的全局指令只写一条无路径的路由规则；所有项目的会话在形成可复用结论时写回同一份 Wiki；所有内容通过 git 自动上传到你的个人仓库——换机器、换工具、换项目，Wiki 一直在。
+
+## 快速开始
+
+### 方式一：交给 AI 部署（推荐）
+
+把本仓库地址发给你的编码 Agent，说一句：
+
+> 读取仓库根目录的 `SETUP-FOR-AI.md`，按其步骤为我部署 llm-wiki。
+
+[SETUP-FOR-AI.md](SETUP-FOR-AI.md) 是面向 Agent 的完整部署指引：环境确认、需要询问你的决策点、分平台安装、验证、全局指令接入（改你的配置前会先征得同意）与收尾报告。
+
+### 方式二：手动安装
+
+前置：git、Python 3。
+
+**macOS / Linux**：
+
+```bash
+git clone <模板仓URL> ~/AI/llm-wiki    # 实例目录任选
+cd ~/AI/llm-wiki
+./scripts/bootstrap.sh
+```
+
+**Windows**（PowerShell 5.1+，无需管理员）：
+
+```powershell
+git clone <模板仓URL> $env:USERPROFILE\llm-wiki    # 实例目录任选
+cd $env:USERPROFILE\llm-wiki
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+```
+
+bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；全程不读写凭据文件），完成：
+
+1. 发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction）→ 实例目录；
+2. 全局 Skill 链接（Claude Code、Codex 各四个：ingest / query / lint / learn）；
+3. 仓内多工具入口（`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接——均不入库，按平台生成，Windows `core.symlinks=false` 的占位文件问题不存在）；
+4. 仓库内记忆配置（Claude `autoMemoryDirectory`；Codex 关闭外部记忆，机制见 `docs/workflows/记忆与多Agent.md`）；
+5. 打印远端配置指引与可粘贴的全局路由段。
+
+**接入全局指令**（二选一）：全局规则已由跨工具规则仓统一管理的，把路由段合入其正本一次生效；否则把 bootstrap 打印的路由段粘进各工具的用户级规则文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等）。
+
+**验证**（Windows 把 `python3` 换成 `python`；`sync.sh` 在 Git Bash 中运行）：
+
+```bash
+python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
+```
+
+> Windows 支持已于 2026-08-27 真机验收（Windows 10 / PowerShell 5.1 / git 2.37 / Python 3.10）：干净 clone 首跑建齐全部链接、幂等重跑、junction 实读、测试与 lint、sync 无远端路径、中文输出。唯一未覆盖项为无 symlink 权限账户的 CLAUDE.md 副本降级路径（降级逻辑已实现，触发时按提示重跑刷新）。详见 `CHANGELOG.md` v0.1.3–v0.1.4。
+
+## 工作原理
+
+```
+┌─ 全局指令层 ── 跨工具规则文件（用户级，单一正本 + symlink 挂载）
+│                └─ 路由段：本机存在 ~/.llm-wiki 才生效，无任何真实路径
+├─ 个人工作台层 ─ llm-wiki 模板 → 每人一份实例
+│                └─ ~/.llm-wiki → 实例目录（个人自选位置）
+└─ 团队编译层 ── （可选）中心定时拉取各人实例仓，二次编译为团队 Wiki
+```
+
+| 核心设计 | 内容 | 为什么 |
+|---|---|---|
+| **发现约定** | 全局指令与全部 Skill 只认 `~/.llm-wiki` 这一个链接入口；实际目录每人自选，bootstrap 建链 | 规则文件里永远没有真实路径，同一份规则可原样分发给所有人；目录搬家只需重建链接 |
+| **模板与实例分离** | 本仓是模板（骨架 + Skill + 脚本 + schema）；clone 后经 bootstrap 成为个人实例，内容归个人 | 模板升级 = `git merge`，只动骨架、永不触碰 `wiki/`、`inputs/` 内容目录，冲突面接近零 |
+| **三级写入门** | 写入前先判层：项目私有留项目；单项目跨会话进 `wiki/projects/<项目>/`；跨项目复用进公共层 | 防止全局化后噪声灌入或知识错层；判据是明文 schema（`docs/schemas/分区与共享.md`），由 ingest skill 强制执行 |
+| **私有区** | `wiki/private/` 被 gitignore，物理不出本机 | 涉他评价、绩效等内容永不出现在远端与团队编译；靠机制而非自觉 |
+| **四环工作流** | ingest（写入）/ query（查询）/ lint（体检）/ learn（学习），每环一个 Skill | 知识库不是文件夹，是带纪律的编译过程 |
+
+## 日常使用
+
+装好之后不需要记住任何命令——在任意项目里正常向 Agent 提问即可：
+
+- **查（query）**：排障、分析、设计、跨项目提问时，Agent 先读 `~/.llm-wiki/wiki/index.md` 下钻命中页，再回查项目源码，回答分「Wiki 结论 / 回查过的事实 / 待核验」。
+- **写（ingest）**：任务收口形成跨会话价值时，Agent 按三级判据写回对应分区、更新索引与当月日志，随后自动 `sync`（pull --rebase → commit → push；冲突停下交人工，无远端仅本地提交）。当轮说「不用写」即跳过。
+- **学（learn）**：「系统学一下 X」触发学习模块——学习路线、教材式章节、练习、测验；未通过验收不会标记「已掌握」。
+- **检（lint）**：「检查 wiki」触发机械体检 + 语义扫描，问题清单落 `wiki/risks/`。
+
+## 工具兼容性
+
+兼容分两层：
+
+- **L1 规则路由（必需，决定「适不适用」）**：工具能读取用户级 Markdown 规则文件即可。路由段让模型按路径读 `~/.llm-wiki/wiki/index.md` 与各 `SKILL.md`——不依赖任何工具专有的 Skill 机制。
+- **L2 原生 Skill 挂载（增强，可选）**：工具有全局技能目录的，bootstrap 额外建链接，获得自动技能路由。
+
+| 工具 | 用户级规则入口 | L1 路由 | L2 Skill 挂载 |
+|---|---|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` | ✓ | ✓ `~/.claude/skills/` |
+| Codex | `~/.codex/AGENTS.md` | ✓ | ✓ `~/.codex/skills/` |
+| OpenCode | `~/.config/opencode/AGENTS.md` | ✓ | —（走 L1 文件引用） |
+| DeepSeek Harness | `$DSH_HOME/AGENTS.md`（默认 `~/.dsh/AGENTS.md`） | ✓ | —（走 L1 文件引用） |
+| Gemini CLI | `~/.gemini/GEMINI.md` | ✓ | —（走 L1 文件引用） |
+| Cursor | 设置中的 User Rules | ✓（粘贴路由段） | — |
+
+各工具入口位置以其官方文档为准。若你的全局规则已由跨工具规则仓（单一文件 + symlink 到上述各入口）统一管理，路由段合入一次即全部工具生效。
+
+## 目录结构
+
+```
+llm-wiki/
+├── AGENTS.md                  # 工作台自身指令正本（CLAUDE.md 兼容入口由 bootstrap 生成）
+├── SETUP-FOR-AI.md            # 面向 AI 助手的部署指引
+├── docs/
+│   ├── schemas/               # wiki.md（wiki 契约）、分区与共享.md（三级判据）
+│   └── workflows/             # 工作方式、新域落地、多 Agent 记忆
+├── .agents/skills/            # Skill 正本：llm-wiki-{ingest,query,lint,learn}
+├── scripts/                   # bootstrap.sh、bootstrap.ps1、sync.sh、lint-wiki.py、new-domain.sh
+├── tests/                     # Skill 契约测试（单一真源、全局路径约定）
+├── wiki/
+│   ├── index.md               # 根索引（两级索引的第一级）
+│   ├── projects/<项目>/       # 项目分区，各自维护子 index
+│   ├── concepts/ entities/ operations/ decisions/ risks/
+│   ├── learning/              # 学习模块
+│   └── private/               # 私有区（gitignore，物理不出本机）
+├── inputs/manual/             # 不可复得的口述与截图原料
+├── config/registry.md         # 项目仓库、域扩展、外部文档的唯一登记处
+├── outputs/                   # 可再生成的交付物（不是 wiki）
+└── state/                     # 本机运行状态（不作证据）
+```
+
+## 模板升级与维护
+
+**使用者**：实例的 `origin` 指个人仓、`upstream` 指模板仓，升级：
+
+```bash
+git fetch upstream && git merge upstream/main
+```
+
+**模板维护者**（同一仓库同时是自己的实例时）：模板历史维护在 `template` 分支，实例在 `main`；模板改进在 `template` 分支提交，实例 `git merge template` 同步——与使用者的 upstream 模式同构。对外发布推 `template` 分支。
+
+约定：模板只演进骨架文件（`docs/schemas/`、`.agents/skills/`、`scripts/`、`tests/`、根说明），永不触碰 `wiki/`、`inputs/` 内容目录；破坏性变更记入 `CHANGELOG.md` 并给迁移方法。
+
+发布安全：发布用 `scripts/release.sh`（自动先跑 `release-check.sh` 三类扫描：内网 IP、凭证模式、本地敏感词表，再推全部发布远端）；并安装维护者 hook `cp scripts/hooks/pre-push .git/hooks/`——它保证推往发布远端的任何 ref 都在 template 历史内（实例分支推不出去，IDE 误点也不行）并强制敏感扫描。词表 `.release-check-local` 留在本机不入库。
+
+## 域扩展
+
+内核不含任何业务采集器。需要接入采集类数据源（聊天工具、项目管理系统、邮箱等）时，按 `docs/workflows/新业务域落地.md` 建立独立的域扩展（采集脚本 + 口径 + 模板三件套，可以是独立仓库），并在 `config/registry.md` 登记路径与敏感级别。标「受限」的域，其数据与分析结论留在域内，本仓 index 只挂入口不下钻。
+
+## 团队化（可选路线）
+
+不做多人共写一个仓。每人一份实例、推各自远端；团队层由中心服务定时拉取各人仓做**二次编译**——个人 wiki 是团队 wiki 的原料，冲突在编译时消解而非 git 合并。前置依赖：schema 统一（模板保证）、私有区纪律（gitignore 保证）、中心侧身份映射。
+
+## 设计决策（FAQ）
+
+- **为什么用链接约定而不是配置文件？** 配置文件仍要求规则文件里出现「读取哪个配置」的路径或逻辑；固定链接把「配置」压缩成文件系统里的一个名字，规则文件零路径、零条件分支，且对不使用者天然失效。
+- **为什么私有区用 gitignore 而不是加密或独立分支？** 需要的保证是「不出本机」，gitignore 是达成它最简单且不可能误推的机制；代价（换机不随 git 迁移）与私有区的预期体量相称。
+- **为什么不让团队共写一个 wiki 仓？** 多人实时共写带来 git 冲突与权责不清，历史上同类尝试（共建文档库）多死于此；「每人一仓 + 中心编译」让写入永远单人、合并永远由编译器做。
+- **为什么 Skill 路径全部绝对化？** 全局挂载后 Agent 的工作目录在任意项目里，相对路径必然解析失败；契约测试禁止裸相对路径回归。
+- **为什么仓库里没有 CLAUDE.md 和 `.claude/skills/`？** 它们是平台相关链接，入库会在 Windows（`core.symlinks=false`）checkout 成无效占位文件；改由 bootstrap 按平台生成，仓库保持平台无关。
+
+## 安全边界
+
+- 密码、token、私钥、kubeconfig、完整连接串不进任何分区（含 private）；凭证一律走本机钥匙串，wiki 只登记「存在哪」。
+- 涉他评价、绩效、薪酬、未公开事项必须写 `wiki/private/`。
+- 采集脚本只落盘不判断；写远程状态前确认对象与字段，执行后回查。
+- 对外分享前审查 `inputs/`、`outputs/`、`wiki/`、`repos/`、`state/`。

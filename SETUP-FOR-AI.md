@@ -1,0 +1,88 @@
+# SETUP-FOR-AI：AI 部署指引
+
+**本文档面向 AI 编码助手（Claude Code、Codex、Cursor 等）**。当用户把本仓库交给你并要求部署时，按本文档执行。人类读者请看 `README.md`。
+
+你的任务：把 llm-wiki 部署为用户的个人全局知识工作台实例。全程遵守：
+
+- 不读取、不写入任何凭据文件（密码、token、私钥、kubeconfig）。
+- 修改用户的全局配置文件（如 `~/.claude/CLAUDE.md`）前，先展示将要追加的内容并征得用户同意。
+- 除本文档列出的目录与文件外，不改动用户机器上的任何东西。
+- 每步执行后核对实际结果，不要凭输出以外的推测宣布成功。
+
+## 第 0 步：环境确认
+
+依次确认，缺失则告知用户安装后再继续：
+
+1. `git --version` 可用；
+2. Python 3 可用（macOS/Linux 通常是 `python3`，Windows 通常是 `python`）；
+3. 判断平台：macOS/Linux 走 bash 路径；Windows 走 PowerShell 路径（脚本兼容 PowerShell 5.1+，junction 无需管理员权限）。
+
+## 第 1 步：询问用户两件事
+
+1. **实例目录放哪**：给出默认建议（macOS/Linux：`~/AI/llm-wiki`；Windows：`%USERPROFILE%\llm-wiki`），用户可任选——之后搬家只需重建发现链接。
+2. **是否已有跨工具规则仓**：即用户的 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等是否为指向同一规则文件的符号链接。这决定第 4 步的接入方式。
+
+## 第 2 步：clone 与初始化
+
+macOS / Linux：
+
+```bash
+git clone <本仓库URL> <用户选择的目录>
+cd <用户选择的目录>
+./scripts/bootstrap.sh
+```
+
+Windows（PowerShell）：
+
+```powershell
+git clone <本仓库URL> <用户选择的目录>
+cd <用户选择的目录>
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+```
+
+bootstrap 幂等（重复执行安全），会完成：发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录；`CLAUDE.md` 兼容入口；Claude/Codex 的项目级与全局 Skill 链接（ingest/query/lint/learn 共 16 个）；仓库内记忆配置。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
+
+## 第 3 步：验证
+
+在实例目录执行（Windows 把 `python3` 换成 `python`）：
+
+```bash
+python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
+```
+
+两者必须通过。再抽查发现链接：读取 `~/.llm-wiki/wiki/index.md` 应得到 Wiki 根索引。
+
+## 第 4 步：接入全局指令（需用户确认）
+
+目标：让用户所有工具的全局规则包含「全局知识工作台」路由段。路由段全文在 `README.md` 与 bootstrap 输出中，特征是以「本节仅当本机存在 `~/.llm-wiki` 时生效」开头。
+
+- 用户**有**跨工具规则仓：把路由段作为独立一节合入其规则正本（走该仓自己的修改流程），一次全部工具生效。
+- 用户**没有**：把路由段分别追加到在用工具的用户级规则文件——`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`、`~/.gemini/GEMINI.md`、`~/.config/opencode/AGENTS.md` 等（文件不存在则创建）。只处理用户实际在用的工具。
+
+**追加前把完整改动展示给用户并获得同意。** 已含同名章节则先对比差异，一致就跳过。
+
+## 第 5 步：远端（可选，问用户）
+
+- 用户有个人 wiki 远程仓库：`git remote add origin <URL>`，之后每次 ingest 收口自动推送。
+- 暂时没有：跳过，sync 会只做本地提交，配置远端后自动恢复上传。
+- 模板升级通道：`git remote add upstream <本模板仓URL>`；升级即 `git fetch upstream && git merge upstream/main`。
+
+## 第 6 步：收尾报告
+
+向用户报告，必须包含：
+
+1. 实例目录、发现链接、全局 Skill 链接的实际位置；
+2. 验证结果（测试与 lint 的真实输出结论）；
+3. 全局指令改了哪些文件（或用户选择了跳过）；
+4. 怎么开始用：在任意项目里正常提问，排障/分析/学习类任务会自动先查 wiki，收口默认写回（说「不用写」跳过）；
+5. 如何卸载：删除 `~/.llm-wiki` 链接、`~/.claude/skills/llm-wiki-*` 与 `~/.codex/skills/llm-wiki-*` 链接、全局规则里的路由段，实例目录本身按用户意愿保留或删除。
+
+## 故障排查
+
+| 现象 | 处置 |
+|---|---|
+| Windows 下 `bootstrap.ps1` 被策略拦截 | 用 `powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1` 调用 |
+| Windows 下 CLAUDE.md 显示「已生成副本」 | 正常降级（该账户无 symlink 权限）；模板升级后重跑 bootstrap 刷新副本 |
+| `git commit` 报身份未配置 | 引导用户设置 `git config --global user.name / user.email` |
+| sync 报 rebase 冲突 | 按脚本提示人工解决后重跑；禁止 force |
+| 链接已存在且指向其他目录 | 本机已有另一实例；与用户确认保留哪个，不要擅自覆盖 |

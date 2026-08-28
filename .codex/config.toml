@@ -1,0 +1,13 @@
+# 本项目的记忆统一存放在仓库内 .memory/，写入规则见 AGENTS.md。
+#
+# Codex 的记忆目录不可配置（固定为 $CODEX_HOME/memories），只能把它自带的记忆系统关掉：
+#   generate_memories = false  本目录的交互会话不再沉淀到仓库外
+#   use_memories      = false  不再注入 ~/.codex/memories 里的旧副本
+#   dedicated_tools   = false  收掉 list/read/search/add_ad_hoc_note
+#
+# 生效前提：本项目须在 ~/.codex/config.toml 里被标记为 trusted。
+# 覆盖范围仅限「以本目录为 cwd 的交互会话」。
+[memories]
+generate_memories = false
+use_memories = false
+dedicated_tools = false
