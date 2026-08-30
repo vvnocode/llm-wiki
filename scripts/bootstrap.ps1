@@ -3,13 +3,22 @@
 #   干净 clone 首跑一次建齐（junction、CLAUDE.md symlink、16 个技能链接、配置文件）、幂等重跑、
 #   junction 实读、契约测试与 lint 通过、sync.sh（Git Bash）无远端路径通过、中文输出无乱码。
 #   未覆盖：无 symlink 权限账户的 CLAUDE.md 副本降级路径（代码在，遇到时按提示重跑刷新即可）。
+# 双形态改造（v0.2.0）：新增 -Mode global|project，与 bootstrap.sh 同构；该改造待 Windows 真机验收。
 #
 # 做的事：
 #   %USERPROFILE%\.llm-wiki 发现 junction、全局 Skill junction（Claude / Codex）、
 #   CLAUDE.md 兼容入口（symlink，失败降级为副本）、本机记忆路径、项目级 Skill junction、远端指引。
 # 不读取、不写入用户凭据文件。兼容 Windows PowerShell 5.1 与 PowerShell 7。
 #
-# 用法：在仓库根目录执行  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+# 用法：在仓库根目录执行  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 [-Mode global|project]
+
+param(
+    # 实例形态：global=全局工作台（建发现 junction 与全局 Skill 挂载）；
+    # project=专项工作台（仅仓内配置）。缺省按发现链探测；全新实例交互询问，
+    # 非交互环境必须显式传入 -Mode。
+    [ValidateSet('global', 'project')]
+    [string]$Mode
+)
 
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -17,6 +26,31 @@ Set-Location $Root
 
 Write-Host "=== llm-wiki bootstrap (Windows) ==="
 Write-Host "实例：$Root"
+Write-Host ""
+
+# ── 模式确定：显式 -Mode 优先；无参数按 %USERPROFILE%\.llm-wiki 探测（与 bootstrap.sh 同构） ──
+$Link = Join-Path $env:USERPROFILE '.llm-wiki'
+if (-not $Mode) {
+    $linkItem = if (Test-Path -LiteralPath $Link) { Get-Item -LiteralPath $Link -Force } else { $null }
+    if ($linkItem -and $linkItem.LinkType -and ([string]($linkItem.Target | Select-Object -First 1) -ieq $Root)) {
+        $Mode = 'global'   # 既有全局实例幂等重跑
+    } elseif ($linkItem) {
+        $Mode = 'project'
+        Write-Host "- 本机全局位已被占用（$Link），按专项模式初始化"
+    } elseif (-not [Console]::IsInputRedirected) {
+        Write-Host "选择实例形态："
+        Write-Host "  global  —— 全局工作台：任意项目的会话都路由到本仓（建发现 junction 与全局 Skill 挂载）"
+        Write-Host "  project —— 专项工作台：cd 进本目录使用，不改动任何全局配置"
+        $Mode = Read-Host "输入 global 或 project"
+        if ($Mode -notin @('global', 'project')) {
+            Write-Host "! 无效输入，请重跑并输入 global 或 project"; exit 1
+        }
+    } else {
+        Write-Host "! 全新实例在非交互环境须显式指定形态：bootstrap.ps1 -Mode global|project"
+        exit 1
+    }
+}
+Write-Host "模式：$Mode"
 Write-Host ""
 
 function Ensure-DirLink {
@@ -37,8 +71,10 @@ function Ensure-DirLink {
     Write-Host "- 已建立 $Link -> $Target"
 }
 
-# 1) 发现约定：全局指令与全部 Skill 只认这个入口
-Ensure-DirLink -Link (Join-Path $env:USERPROFILE '.llm-wiki') -Target $Root
+# 1) 发现约定（仅全局模式）：全局指令与全部 Skill 只认这个入口
+if ($Mode -eq 'global') {
+    Ensure-DirLink -Link $Link -Target $Root
+}
 
 # 2) CLAUDE.md 兼容入口（文件级）：优先 symlink（需开发者模式或管理员），失败降级为副本
 $agents = Join-Path $Root 'AGENTS.md'
@@ -103,11 +139,14 @@ dedicated_tools = false
     Write-Host "- .codex/config.toml 已存在"
 }
 
-# 5) 项目级 Skill 兼容链接 + 6) 全局 Skill 挂载（目录 junction，无需管理员）
+# 5) 项目级 Skill 兼容链接（两模式）+ 6) 全局 Skill 挂载（仅全局模式追加；目录 junction，无需管理员）
 $skills = @('llm-wiki-ingest', 'llm-wiki-query', 'llm-wiki-lint', 'llm-wiki-learn')
 $canonRoot = Join-Path $Root '.agents\skills'
-foreach ($destRoot in @((Join-Path $Root '.claude\skills'), (Join-Path $Root '.codex\skills'),
-                        (Join-Path $env:USERPROFILE '.claude\skills'), (Join-Path $env:USERPROFILE '.codex\skills'))) {
+$destRoots = @((Join-Path $Root '.claude\skills'), (Join-Path $Root '.codex\skills'))
+if ($Mode -eq 'global') {
+    $destRoots += @((Join-Path $env:USERPROFILE '.claude\skills'), (Join-Path $env:USERPROFILE '.codex\skills'))
+}
+foreach ($destRoot in $destRoots) {
     New-Item -ItemType Directory -Path $destRoot -Force | Out-Null
     foreach ($s in $skills) {
         Ensure-DirLink -Link (Join-Path $destRoot $s) -Target (Join-Path $canonRoot $s)
@@ -129,6 +168,8 @@ if ($remotes -notcontains 'origin') {
 }
 
 Write-Host ""
+# 尾部指引按模式分叉：全局给路由段，专项确认零全局改动
+if ($Mode -eq 'global') {
 Write-Host "-- 全局指令接入（二选一）--"
 Write-Host "A. 跨工具规则仓已含「全局知识工作台」路由段：无需操作。"
 Write-Host "B. 手工粘贴：把下面这段加进各工具的用户级规则文件（如 %USERPROFILE%\.claude\CLAUDE.md、%USERPROFILE%\.codex\AGENTS.md）："
@@ -144,6 +185,11 @@ Write-Host "B. 手工粘贴：把下面这段加进各工具的用户级规则�
 - 判据、skill 与 schema 一律以 `~/.llm-wiki` 仓内文件为准；本节只负责路由。
 ----------------------------------------
 '@ | Write-Host
+} else {
+Write-Host "-- 专项实例就绪 --"
+Write-Host "cd 进本目录即可使用：AGENTS.md 生效，Skill 走项目级链接路由；未改动任何全局配置。"
+Write-Host "如需转为全局工作台：powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode global"
+}
 
 Write-Host ""
 Write-Host "-- 提示 --"
