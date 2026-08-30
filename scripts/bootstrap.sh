@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# 一键初始化个人实例：
-#   ~/.llm-wiki 发现软链、全局 Skill 软链（Claude / Codex）、
-#   CLAUDE.md 兼容软链、本机记忆路径、项目级 Skill 软链、脚本权限、远端指引。
+# 一键初始化个人实例（双形态）。用法：bootstrap.sh [--mode global|project]
+#   global  全局工作台：~/.llm-wiki 发现软链 + 全局 Skill 软链（Claude / Codex）+ 仓内配置
+#   project 专项工作台：仅仓内配置（CLAUDE.md 兼容软链、本机记忆路径、
+#           项目级 Skill 软链、脚本权限、远端指引），不改动任何全局配置
+# 缺省 --mode 时按发现链探测；全新实例交互询问，非交互环境必须显式传参。
 # 不读取、不写入用户主目录里的凭据文件。
 set -euo pipefail
 
@@ -10,6 +12,46 @@ cd "$ROOT"
 
 echo "═══ llm-wiki bootstrap ═══"
 echo "实例：$ROOT"
+echo
+
+# ── 模式确定 ──
+# 显式 --mode 优先；无参数按发现链探测：已指向本仓→global（幂等重跑），
+# 指向别处→project；全新实例交互询问，非 TTY 必须显式传参（防误建全局链）。
+MODE=""
+LINK="$HOME/.llm-wiki"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --mode)   MODE="${2:?--mode 需要值：global 或 project}"; shift 2 ;;
+        --mode=*) MODE="${1#--mode=}"; shift ;;
+        *) echo "✗ 未知参数：$1（用法：bootstrap.sh [--mode global|project]）" >&2; exit 1 ;;
+    esac
+done
+case "$MODE" in
+    global|project) ;;
+    "")
+        if [ -L "$LINK" ] && [ "$(readlink "$LINK")" = "$ROOT" ]; then
+            MODE=global
+        elif [ -e "$LINK" ] || [ -L "$LINK" ]; then
+            MODE=project
+            echo "· 本机全局位已被 $(readlink "$LINK" 2>/dev/null || echo "$LINK") 占用，按专项模式初始化"
+        elif [ -t 0 ]; then
+            echo "选择实例形态："
+            echo "  global  —— 全局工作台：任意项目的会话都路由到本仓（建 ~/.llm-wiki 发现链与全局 Skill 挂载）"
+            echo "  project —— 专项工作台：cd 进本目录使用，不改动任何全局配置"
+            printf "输入 global 或 project："
+            read -r MODE
+            case "$MODE" in
+                global|project) ;;
+                *) echo "✗ 无效输入，请重跑并输入 global 或 project" >&2; exit 1 ;;
+            esac
+        else
+            echo "✗ 全新实例在非交互环境须显式指定形态：bootstrap.sh --mode global|project" >&2
+            exit 1
+        fi
+        ;;
+    *) echo "✗ --mode 只接受 global 或 project" >&2; exit 1 ;;
+esac
+echo "模式：$MODE"
 echo
 
 ensure_link() {
@@ -33,8 +75,10 @@ ensure_link() {
     echo "· 已建立 $link → $target"
 }
 
-# 1) 发现约定：全局指令与全部 Skill 只认这个入口
-ensure_link "$HOME/.llm-wiki" "$ROOT"
+# 1) 发现约定（仅全局模式）：全局指令与全部 Skill 只认这个入口
+if [ "$MODE" = global ]; then
+    ensure_link "$LINK" "$ROOT"
+fi
 
 # 2) 兼容入口与目录
 ensure_link CLAUDE.md AGENTS.md
@@ -97,14 +141,16 @@ for skill in llm-wiki-ingest llm-wiki-query llm-wiki-lint llm-wiki-learn; do
     link_skill_local "$skill"
 done
 
-# 6) 全局 Skill 挂载：任意项目的会话都能路由到这四个 skill。
+# 6) 全局 Skill 挂载（仅全局模式）：任意项目的会话都能路由到这四个 skill。
 #    canonical 仍是本仓 .agents/skills。
-for tool_root in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
-    mkdir -p "$tool_root"
-    for skill in llm-wiki-ingest llm-wiki-query llm-wiki-lint llm-wiki-learn; do
-        ensure_link "$tool_root/$skill" "$HOME/.llm-wiki/.agents/skills/$skill"
+if [ "$MODE" = global ]; then
+    for tool_root in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+        mkdir -p "$tool_root"
+        for skill in llm-wiki-ingest llm-wiki-query llm-wiki-lint llm-wiki-learn; do
+            ensure_link "$tool_root/$skill" "$HOME/.llm-wiki/.agents/skills/$skill"
+        done
     done
-done
+fi
 
 chmod +x scripts/*.sh scripts/*.py 2>/dev/null || true
 echo "· 脚本已加执行权限"
@@ -121,6 +167,8 @@ if ! git remote get-url origin >/dev/null 2>&1; then
 fi
 
 echo
+# 尾部指引按模式分叉：全局给路由段，专项确认零全局改动（heredoc 正文保持零缩进）
+if [ "$MODE" = global ]; then
 echo "── 全局指令接入（二选一）──"
 echo "A. 跨工具规则仓已含「全局知识工作台」路由段：无需操作。"
 echo "B. 手工粘贴：把下面这段加进 ~/.claude/CLAUDE.md、~/.codex/AGENTS.md 等全局文件："
@@ -136,6 +184,11 @@ cat <<'ROUTE'
 - 判据、skill 与 schema 一律以 `~/.llm-wiki` 仓内文件为准；本节只负责路由。
 ────────────────────────────────────────
 ROUTE
+else
+echo "── 专项实例就绪 ──"
+echo "cd 进本目录即可使用：AGENTS.md 生效，Skill 走项目级链接路由；未改动任何全局配置。"
+echo "如需转为全局工作台：./scripts/bootstrap.sh --mode global"
+fi
 echo
 echo "── Codex 信任（用 Codex 才需要）──"
 echo "把下面这段追加到 ~/.codex/config.toml："

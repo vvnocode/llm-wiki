@@ -17,10 +17,11 @@
 2. Python 3 可用（macOS/Linux 通常是 `python3`，Windows 通常是 `python`）；
 3. 判断平台：macOS/Linux 走 bash 路径；Windows 走 PowerShell 路径（脚本兼容 PowerShell 5.1+，junction 无需管理员权限）。
 
-## 第 1 步：询问用户两件事
+## 第 1 步：询问用户三件事
 
-1. **实例目录放哪**：给出默认建议（macOS/Linux：`~/AI/llm-wiki`；Windows：`%USERPROFILE%\llm-wiki`），用户可任选——之后搬家只需重建发现链接。
-2. **是否已有跨工具规则仓**：即用户的 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等是否为指向同一规则文件的符号链接。这决定第 4 步的接入方式。
+1. **要哪种形态**：全局工作台（跨项目共用一份，建 `~/.llm-wiki` 发现链与全局 Skill 挂载）还是专项工作台（单一业务域、直接进入目录使用，不动任何全局配置）。专项形态可与既有全局工作台并存、一机多个。
+2. **实例目录放哪**：给出默认建议（macOS/Linux：`~/AI/llm-wiki`；Windows：`%USERPROFILE%\llm-wiki`），用户可任选——之后搬家只需重建发现链接（专项形态则直接搬目录）。
+3. **是否已有跨工具规则仓**（仅全局形态需要问）：即用户的 `~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等是否为指向同一规则文件的符号链接。这决定第 4 步的接入方式。
 
 ## 第 2 步：clone 与初始化
 
@@ -29,7 +30,7 @@ macOS / Linux：
 ```bash
 git clone <本仓库URL> <用户选择的目录>
 cd <用户选择的目录>
-./scripts/bootstrap.sh
+./scripts/bootstrap.sh --mode <global|project，按第 1 步的选择>
 ```
 
 Windows（PowerShell）：
@@ -37,10 +38,10 @@ Windows（PowerShell）：
 ```powershell
 git clone <本仓库URL> <用户选择的目录>
 cd <用户选择的目录>
-powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode <global|project，按第 1 步的选择>
 ```
 
-bootstrap 幂等（重复执行安全），会完成：发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录；`CLAUDE.md` 兼容入口；Claude/Codex 的项目级与全局 Skill 链接（ingest/query/lint/learn 共 16 个）；仓库内记忆配置。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
+bootstrap 幂等（重复执行安全），会完成：`CLAUDE.md` 兼容入口、Claude/Codex 项目级 Skill 链接、仓库内记忆配置；全局形态另建发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录，及全局 Skill 链接（ingest/query/lint/learn，两形态合计 16 个链接，专项形态仅仓内 8 个）。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
 
 ## 第 3 步：验证
 
@@ -50,9 +51,11 @@ bootstrap 幂等（重复执行安全），会完成：发现链接 `~/.llm-wiki
 python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 ```
 
-两者必须通过。再抽查发现链接：读取 `~/.llm-wiki/wiki/index.md` 应得到 Wiki 根索引。
+两者必须通过。全局形态再抽查发现链接：读取 `~/.llm-wiki/wiki/index.md` 应得到 Wiki 根索引；专项形态读取实例目录下的 `wiki/index.md` 即可。
 
 ## 第 4 步：接入全局指令（需用户确认）
+
+**专项形态跳过本步**（专项实例不接入全局指令，直接到第 5 步）。
 
 目标：让用户所有工具的全局规则包含「全局知识工作台」路由段。路由段全文在 `README.md` 与 bootstrap 输出中，特征是以「本节仅当本机存在 `~/.llm-wiki` 时生效」开头。
 
@@ -71,11 +74,11 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 
 向用户报告，必须包含：
 
-1. 实例目录、发现链接、全局 Skill 链接的实际位置；
+1. 实例目录与形态；全局形态另报告发现链接、全局 Skill 链接的实际位置；
 2. 验证结果（测试与 lint 的真实输出结论）；
-3. 全局指令改了哪些文件（或用户选择了跳过）；
-4. 怎么开始用：在任意项目里正常提问，排障/分析/学习类任务会自动先查 wiki，收口默认写回（说「不用写」跳过）；
-5. 如何卸载：删除 `~/.llm-wiki` 链接、`~/.claude/skills/llm-wiki-*` 与 `~/.codex/skills/llm-wiki-*` 链接、全局规则里的路由段，实例目录本身按用户意愿保留或删除。
+3. 全局指令改了哪些文件（或用户选择了跳过 / 专项形态不适用）；
+4. 怎么开始用：全局形态在任意项目里正常提问，排障/分析/学习类任务会自动先查 wiki，收口默认写回（说「不用写」跳过）；专项形态 cd 进实例目录后同样提问即可；
+5. 如何卸载：全局形态删除 `~/.llm-wiki` 链接、`~/.claude/skills/llm-wiki-*` 与 `~/.codex/skills/llm-wiki-*` 链接、全局规则里的路由段；专项形态无任何全局痕迹。实例目录本身按用户意愿保留或删除。
 
 ## 故障排查
 
@@ -85,4 +88,5 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 | Windows 下 CLAUDE.md 显示「已生成副本」 | 正常降级（该账户无 symlink 权限）；模板升级后重跑 bootstrap 刷新副本 |
 | `git commit` 报身份未配置 | 引导用户设置 `git config --global user.name / user.email` |
 | sync 报 rebase 冲突 | 按脚本提示人工解决后重跑；禁止 force |
-| 链接已存在且指向其他目录 | 本机已有另一实例；与用户确认保留哪个，不要擅自覆盖 |
+| 链接已存在且指向其他目录 | 本机已有另一全局实例；与用户确认保留哪个，不要擅自覆盖（新实例可改走专项形态并存） |
+| 非交互执行报「须显式指定形态」 | 全新实例需明确形态：补 `--mode global\|project`（Windows `-Mode`）重跑 |

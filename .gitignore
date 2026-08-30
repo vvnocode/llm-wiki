@@ -13,6 +13,8 @@ wiki/private/*
 !wiki/private/README.md
 # 采集游标本机私有；产出水位线若有则入 Git
 state/collectors/
+# 任务 worktree（开发纪律要求，不入库）
+.worktrees/
 # 兼容入口与项目级 skill 链接由 bootstrap 按平台生成（macOS/Linux 软链，Windows junction/副本），不入库
 /CLAUDE.md
 .claude/skills/
