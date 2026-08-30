@@ -11,7 +11,7 @@
 - 迁移：既有全局实例 merge 后重跑 bootstrap 即可，无目录或数据变更；自动化脚本中对全新实例的 bootstrap 调用需补 `--mode` 参数。
 - Windows：bootstrap.ps1 已同构改造，真机验收待补（v0.1.0 既有功能不受影响）。
 - 路由段：bootstrap 打印的「全局知识工作台」段增补实例内就近优先条款（cwd 在某实例内时以该实例为工作台、本段路由不适用），与 skill 的 $WIKI 规则及规则仓同文对齐。
-- 杂项：`.gitignore` 增 `.worktrees/`；README / SETUP-FOR-AI / AGENTS.md / 分区与共享 改双形态叙事。
+- 杂项：`.gitignore` 增 `.worktrees/`；README / SETUP-FOR-AI / AGENTS.md / 分区与共享 改双形态叙事，并补全局形态外部前置说明（路由段接入，可由配套规则仓 [claude.md](https://github.com/vvnocode/claude.md) 承载；专项形态零外部前置，先后顺序无关）。
 
 ## v0.1.0 (2026-08-28)
 

@@ -26,7 +26,7 @@ llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现
 
 ### 方式二：手动安装
 
-前置：git、Python 3。
+前置：git、Python 3。全局形态另有一个外部前置——「全局知识工作台」路由段要进入你的全局规则（见下方「接入全局指令」，可由配套规则仓承载或手工粘贴）；专项形态无额外前置。
 
 **macOS / Linux**：
 
@@ -52,7 +52,12 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 4. 仓库内记忆配置（Claude `autoMemoryDirectory`；Codex 关闭外部记忆，机制见 `docs/workflows/记忆与多Agent.md`）；
 5. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
 
-**接入全局指令**（仅全局模式，二选一）：全局规则已由跨工具规则仓统一管理的，把路由段合入其正本一次生效；否则把 bootstrap 打印的路由段粘进各工具的用户级规则文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等）。
+**接入全局指令**（仅全局模式；这是全局形态唯一的外部前置——让「全局知识工作台」路由段进入你的全局规则，二选一）：
+
+- **配套规则仓 [claude.md](https://github.com/vvnocode/claude.md)（推荐）**：跨工具工程纪律基线，正本已内置本工作台路由段；按其 README 把各工具用户级入口软链到规则正本即生效，无需手工粘贴。已在用它的，更新到含「全局知识工作台」一节的版本即可。
+- **手工粘贴**：把 bootstrap 打印的路由段粘进各工具的用户级规则文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等）。
+
+路由段自带条件门（本机存在 `~/.llm-wiki` 才生效），因此规则仓与本工作台**先装后装皆可**、互不阻塞；专项模式两者都不需要。
 
 **验证**（Windows 把 `python3` 换成 `python`；`sync.sh` 在 Git Bash 中运行）：
 
@@ -108,7 +113,7 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 | Gemini CLI | `~/.gemini/GEMINI.md` | ✓ | —（走 L1 文件引用） |
 | Cursor | 设置中的 User Rules | ✓（粘贴路由段） | — |
 
-各工具入口位置以其官方文档为准。若你的全局规则已由跨工具规则仓（单一文件 + symlink 到上述各入口）统一管理，路由段合入一次即全部工具生效。
+各工具入口位置以其官方文档为准。若你的全局规则已由跨工具规则仓（单一文件 + symlink 到上述各入口）统一管理，路由段合入一次即全部工具生效——配套参考实现：[claude.md](https://github.com/vvnocode/claude.md)（已内置路由段）。
 
 ## 目录结构
 
