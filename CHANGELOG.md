@@ -2,6 +2,16 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.0 (2026-08-30)
+
+双形态支持：实例化时可选**专项工作台**（clone 后直接进入目录使用）或**全局工作台**（现行 `~/.llm-wiki` 发现约定）。设计见 `docs/specs/2026-08-30-双形态支持-design.md`。
+
+- Skill 契约变更：四份 SKILL.md 改为统一「工作台根（$WIKI）」解析——cwd 所在实例优先，否则 `~/.llm-wiki`；全局+专项并存时在专项实例内不再误写全局库。契约测试 `test_global_skill_paths_absolute` 替换为 `test_skill_root_resolution`。
+- bootstrap 变更：新增 `--mode global|project`（ps1 为 `-Mode`）。无参数时按发现链探测：已指向本仓→global（既有实例重跑不受影响）；全新实例交互询问，**非交互环境必须显式传参**（原静默建全局链的行为取消）。project 模式不改动任何全局配置。
+- 迁移：既有全局实例 merge 后重跑 bootstrap 即可，无目录或数据变更；自动化脚本中对全新实例的 bootstrap 调用需补 `--mode` 参数。
+- Windows：bootstrap.ps1 已同构改造，真机验收待补（v0.1.0 既有功能不受影响）。
+- 杂项：`.gitignore` 增 `.worktrees/`；README / SETUP-FOR-AI / AGENTS.md / 分区与共享 改双形态叙事。
+
 ## v0.1.0 (2026-08-28)
 
 首个发布版本。
