@@ -10,6 +10,7 @@
 - bootstrap 变更：新增 `--mode global|project`（ps1 为 `-Mode`）。无参数时按发现链探测：已指向本仓→global（既有实例重跑不受影响）；全新实例交互询问，**非交互环境必须显式传参**（原静默建全局链的行为取消）。project 模式不改动任何全局配置。
 - 迁移：既有全局实例 merge 后重跑 bootstrap 即可，无目录或数据变更；自动化脚本中对全新实例的 bootstrap 调用需补 `--mode` 参数。
 - Windows：bootstrap.ps1 已同构改造，真机验收待补（v0.1.0 既有功能不受影响）。
+- 路由段：bootstrap 打印的「全局知识工作台」段增补实例内就近优先条款（cwd 在某实例内时以该实例为工作台、本段路由不适用），与 skill 的 $WIKI 规则及规则仓同文对齐。
 - 杂项：`.gitignore` 增 `.worktrees/`；README / SETUP-FOR-AI / AGENTS.md / 分区与共享 改双形态叙事。
 
 ## v0.1.0 (2026-08-28)
