@@ -1,6 +1,6 @@
 # llm-wiki
 
-> 个人全局知识工作台：任何 AI 编码工具、在任何项目里沉淀的经验，都汇入你的同一份 Wiki，并自动提交上传。
+> 个人 LLM Wiki 工作台：可作为**全局工作台**——任何 AI 编码工具、在任何项目里沉淀的经验都汇入同一份 Wiki 并自动上传；也可作为**专项工作台**——clone 后直接进入目录，为单一业务域独立使用。
 
 适用于 Claude Code、Codex、Cursor、OpenCode、Gemini CLI、DeepSeek Harness 等支持用户级规则文件的编码 Agent。思想承 [Karpathy LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)（原料与编译知识分层，ingest / query / lint 三环维护），并在其上扩展了**全局化**（跨项目、跨工具共用一份）、**多项目分区**、**私有区**与 **learning 学习模块**（第四环）。
 
@@ -12,6 +12,8 @@
 
 llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现的个人工作台**：所有工具的全局指令只写一条无路径的路由规则；所有项目的会话在形成可复用结论时写回同一份 Wiki；所有内容通过 git 自动上传到你的个人仓库——换机器、换工具、换项目，Wiki 一直在。
 
+两种形态按需选择：**全局工作台**服务个人跨项目积累，一机一份；**专项工作台**服务单一业务域（如某个团队角色的工作库），clone 后直接进入目录使用，不动任何全局配置，可与全局工作台并存、一机多个。同一套结构、Skill 与纪律，bootstrap 时用 `--mode` 选定。
+
 ## 快速开始
 
 ### 方式一：交给 AI 部署（推荐）
@@ -20,7 +22,7 @@ llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现
 
 > 读取仓库根目录的 `SETUP-FOR-AI.md`，按其步骤为我部署 llm-wiki。
 
-[SETUP-FOR-AI.md](SETUP-FOR-AI.md) 是面向 Agent 的完整部署指引：环境确认、需要询问你的决策点、分平台安装、验证、全局指令接入（改你的配置前会先征得同意）与收尾报告。
+[SETUP-FOR-AI.md](SETUP-FOR-AI.md) 是面向 Agent 的完整部署指引：环境确认、需要询问你的决策点（形态、目录、远端）、分平台安装、验证、全局指令接入（改你的配置前会先征得同意）与收尾报告。
 
 ### 方式二：手动安装
 
@@ -31,7 +33,7 @@ llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现
 ```bash
 git clone <模板仓URL> ~/AI/llm-wiki    # 实例目录任选
 cd ~/AI/llm-wiki
-./scripts/bootstrap.sh
+./scripts/bootstrap.sh --mode global    # 专项工作台改 --mode project；缺省时交互询问
 ```
 
 **Windows**（PowerShell 5.1+，无需管理员）：
@@ -39,18 +41,18 @@ cd ~/AI/llm-wiki
 ```powershell
 git clone <模板仓URL> $env:USERPROFILE\llm-wiki    # 实例目录任选
 cd $env:USERPROFILE\llm-wiki
-powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode global    # 专项工作台改 -Mode project
 ```
 
 bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；全程不读写凭据文件），完成：
 
-1. 发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction）→ 实例目录；
-2. 全局 Skill 链接（Claude Code、Codex 各四个：ingest / query / lint / learn）；
+1. （仅全局模式）发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction）→ 实例目录；
+2. （仅全局模式）全局 Skill 链接（Claude Code、Codex 各四个：ingest / query / lint / learn）；
 3. 仓内多工具入口（`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接——均不入库，按平台生成，Windows `core.symlinks=false` 的占位文件问题不存在）；
 4. 仓库内记忆配置（Claude `autoMemoryDirectory`；Codex 关闭外部记忆，机制见 `docs/workflows/记忆与多Agent.md`）；
-5. 打印远端配置指引与可粘贴的全局路由段。
+5. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
 
-**接入全局指令**（二选一）：全局规则已由跨工具规则仓统一管理的，把路由段合入其正本一次生效；否则把 bootstrap 打印的路由段粘进各工具的用户级规则文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等）。
+**接入全局指令**（仅全局模式，二选一）：全局规则已由跨工具规则仓统一管理的，把路由段合入其正本一次生效；否则把 bootstrap 打印的路由段粘进各工具的用户级规则文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等）。
 
 **验证**（Windows 把 `python3` 换成 `python`；`sync.sh` 在 Git Bash 中运行）：
 
@@ -58,7 +60,7 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 ```
 
-> Windows 支持已于 2026-08-27 真机验收（Windows 10 / PowerShell 5.1 / git 2.37 / Python 3.10）：干净 clone 首跑建齐全部链接、幂等重跑、junction 实读、测试与 lint、sync 无远端路径、中文输出。唯一未覆盖项为无 symlink 权限账户的 CLAUDE.md 副本降级路径（降级逻辑已实现，触发时按提示重跑刷新）。详见 `CHANGELOG.md` v0.1.3–v0.1.4。
+> Windows 支持已于 2026-08-27 真机验收（Windows 10 / PowerShell 5.1 / git 2.37 / Python 3.10）：干净 clone 首跑建齐全部链接、幂等重跑、junction 实读、测试与 lint、sync 无远端路径、中文输出。唯一未覆盖项为无 symlink 权限账户的 CLAUDE.md 副本降级路径（降级逻辑已实现，触发时按提示重跑刷新）。详见 `CHANGELOG.md` v0.1.0。
 
 ## 工作原理
 
@@ -70,9 +72,12 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 └─ 团队编译层 ── （可选）中心定时拉取各人实例仓，二次编译为团队 Wiki
 ```
 
+上图为全局形态。专项工作台不经过全局指令层：clone 后直接进入目录，仓内 `AGENTS.md` 即入口。
+
 | 核心设计 | 内容 | 为什么 |
 |---|---|---|
 | **发现约定** | 全局指令与全部 Skill 只认 `~/.llm-wiki` 这一个链接入口；实际目录每人自选，bootstrap 建链 | 规则文件里永远没有真实路径，同一份规则可原样分发给所有人；目录搬家只需重建链接 |
+| **双形态与模式推导** | 全局工作台经 `~/.llm-wiki` 发现，一机一份；专项工作台直接进入目录使用，可多份并存。「是否全局」仅由 `~/.llm-wiki` 指向谁决定，无配置文件；Skill 按「cwd 所在实例优先，否则 `~/.llm-wiki`」解析工作台根 | 模式不可能与文件系统失同步；全局+专项并存时就近优先，不会写错库 |
 | **模板与实例分离** | 本仓是模板（骨架 + Skill + 脚本 + schema）；clone 后经 bootstrap 成为个人实例，内容归个人 | 模板升级 = `git merge`，只动骨架、永不触碰 `wiki/`、`inputs/` 内容目录，冲突面接近零 |
 | **三级写入门** | 写入前先判层：项目私有留项目；单项目跨会话进 `wiki/projects/<项目>/`；跨项目复用进公共层 | 防止全局化后噪声灌入或知识错层；判据是明文 schema（`docs/schemas/分区与共享.md`），由 ingest skill 强制执行 |
 | **私有区** | `wiki/private/` 被 gitignore，物理不出本机 | 涉他评价、绩效等内容永不出现在远端与团队编译；靠机制而非自觉 |
@@ -129,6 +134,11 @@ llm-wiki/
 └── state/                     # 本机运行状态（不作证据）
 ```
 
+## 模式切换
+
+- **专项 → 全局**：在实例目录重跑 `./scripts/bootstrap.sh --mode global`（Windows：`-Mode global`），补建发现链与全局挂载，再按「接入全局指令」粘贴路由段。前提：本机全局位未被其他实例占用。
+- **全局 → 专项**：手工删除 `~/.llm-wiki` 链接、`~/.claude/skills/llm-wiki-*` 与 `~/.codex/skills/llm-wiki-*` 共 8 条链接，并移除全局规则中的路由段；实例目录与内容不动。bootstrap 只增不减，不代做删除。
+
 ## 模板升级与维护
 
 **使用者**：实例的 `origin` 指个人仓、`upstream` 指模板仓，升级：
@@ -154,6 +164,7 @@ git fetch upstream && git merge upstream/main
 ## 设计决策（FAQ）
 
 - **为什么用链接约定而不是配置文件？** 配置文件仍要求规则文件里出现「读取哪个配置」的路径或逻辑；固定链接把「配置」压缩成文件系统里的一个名字，规则文件零路径、零条件分支，且对不使用者天然失效。
+- **为什么模式不用配置文件记录？** 与发现约定同理：`~/.llm-wiki` 指向谁、谁就是全局实例，模式即文件系统状态本身，不存在第二份需要保持同步的记录；专项实例因此天然「零全局痕迹」。
 - **为什么私有区用 gitignore 而不是加密或独立分支？** 需要的保证是「不出本机」，gitignore 是达成它最简单且不可能误推的机制；代价（换机不随 git 迁移）与私有区的预期体量相称。
 - **为什么不让团队共写一个 wiki 仓？** 多人实时共写带来 git 冲突与权责不清，历史上同类尝试（共建文档库）多死于此；「每人一仓 + 中心编译」让写入永远单人、合并永远由编译器做。
 - **为什么 Skill 路径全部绝对化？** 全局挂载后 Agent 的工作目录在任意项目里，相对路径必然解析失败；契约测试禁止裸相对路径回归。

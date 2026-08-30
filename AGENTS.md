@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-这是一个**通用的个人全局 LLM Wiki 工作台**：任何 vibe coding agent、在任何项目里形成的可复用知识，都沉淀到这一份 wiki。实例通过固定软链 `~/.llm-wiki` 被全局指令发现；跨项目路由由全局指令（如 claude.md 规则仓的「全局知识工作台」节）承担，本文件约束「进入本目录工作」的会话。
+这是一个**个人 LLM Wiki 工作台**，双形态：既可经固定软链 `~/.llm-wiki` 被全局指令发现、作为**全局工作台**（任何 vibe coding agent、在任何项目里形成的可复用知识都汇入这一份），也可作为**专项工作台**直接进入本目录、服务单一业务域。两种形态共用同一套结构与纪律。跨项目路由（仅全局形态）由全局指令（如 claude.md 规则仓的「全局知识工作台」节）承担；本文件约束「进入本目录工作」的会话，对两种形态同时成立。
 
 原料进入 `inputs/`，编译进 `wiki/`，可再生成的交付物进 `outputs/`。开始领域任务时，先读 `wiki/index.md` 和命中页；接口、部署与安全事实必须回查所在项目源码或登记数据源，不能只信 Wiki。
 
@@ -27,7 +27,7 @@
 
 ## Ingest 收口与自动上传
 
-任务形成跨会话价值时默认 ingest（用户当轮说「不用」才跳过）；ingest 完成后运行 `~/.llm-wiki/scripts/sync.sh "<主题>"` 完成提交与上传。rebase 冲突时脚本会停下交人工，禁止 force。
+任务形成跨会话价值时默认 ingest（用户当轮说「不用」才跳过）；ingest 完成后运行 `scripts/sync.sh "<主题>"` 完成提交与上传。rebase 冲突时脚本会停下交人工，禁止 force。
 
 ## 数据与凭证
 
@@ -36,10 +36,10 @@
 
 ## Skill 路由
 
-- 导入、整理、更新知识：`~/.llm-wiki/.agents/skills/llm-wiki-ingest/SKILL.md`
-- 分析、设计、排障、跨项目提问：`~/.llm-wiki/.agents/skills/llm-wiki-query/SKILL.md`
-- 检查 Wiki：`~/.llm-wiki/.agents/skills/llm-wiki-lint/SKILL.md`
-- 系统学习、教材化整理、验收：`~/.llm-wiki/.agents/skills/llm-wiki-learn/SKILL.md`
+- 导入、整理、更新知识：`.agents/skills/llm-wiki-ingest/SKILL.md`
+- 分析、设计、排障、跨项目提问：`.agents/skills/llm-wiki-query/SKILL.md`
+- 检查 Wiki：`.agents/skills/llm-wiki-lint/SKILL.md`
+- 系统学习、教材化整理、验收：`.agents/skills/llm-wiki-learn/SKILL.md`
 
 ## 域扩展与路径登记
 
