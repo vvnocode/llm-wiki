@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.3 (2026-08-31)
+
+- `AGENTS.md`「提交与分支约定」补齐 v0.2.2 审计缺口：短期分支合入前须经用户确认；总则「合入 main」改为「合回其目标分支」，消除与合一仓骨架合回 `template` 的表述冲突；发布指定走 `scripts/release.sh`（禁止手工 push 发布远端）；实例段可收紧内容白名单，收紧者优先；合并在任务 worktree 内执行、根工作区始终留在 `main`。
+- `tests/test_skill_contracts.py` 新增白名单一致性契约：`AGENTS.md` 内容目录清单与 `scripts/sync.sh` `add_content` 清单必须同源一致。
+
 ## v0.2.2 (2026-08-31)
 
 - `AGENTS.md`「提交与分支约定」增补两条：内容目录白名单（`wiki/` `inputs/` `outputs/` `state/` `.memory/`）直接在 `main` 提交，白名单外任何文件改动一律先建 worktree（按改动落点判定，不枚举任务类型）；一个 worktree 一个合入目标，维护者合一仓骨架改动以 `template` 为基线、经版本发布 merge 进 `main`。
