@@ -49,6 +49,22 @@
 
 本仓从模板（上游 `template` 历史）实例化而来：骨架文件（`docs/schemas/`、`.agents/skills/`、`scripts/`、`tests/`、根说明文件）由模板演进，升级用 `git merge`（upstream 或本仓 `template` 分支）；`wiki/`、`inputs/` 内容目录归个人，模板永不触碰。
 
+## 提交与分支约定
+
+分支只有两类：**`main` 唯一长期分支**（知识、数据与实例配置的最终落点；没有远端也必须本地提交）；**短期任务分支**一律放 `.worktrees/{任务名}/`，验证后 `--no-ff` 合入 `main` 并删除。模板升级直接在 `main` 上 merge（**禁止 rebase**——rebase 会重写 main 历史，破坏既有产出对提交的追溯，也会与远端历史分裂；merge 节点本身就是升级留痕）；预计冲突较大时先在 `.worktrees/upgrade-{版本}/` 演练，绿后再正式 merge。
+
+提交前缀：
+
+| 前缀 | 用途 |
+|---|---|
+| `ingest:` | wiki 知识写入（sync.sh 默认使用） |
+| `merge:` | 短期任务分支合入 main |
+| `upgrade:` | 模板升级合并的 merge commit |
+| `instance:` | 骨架适配与实例配置（AGENTS 实例段、.gitignore、registry 等） |
+| `docs:` / `ops:` / `fix:` / `chore:` | 常规含义 |
+
+业务域可自行补充前缀（如采集、报告类），在实例段登记。实例**不产生** `template:` 前缀提交：通用骨架改进一律到模板仓的 `template` 分支开发（维护者合一仓即本仓 `template` 分支，前缀 `template:`），发布后经 `upgrade:` 合并回流各实例。
+
 ## 多工具入口
 
 `AGENTS.md` 是唯一指令正本；`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接不入库，由 bootstrap 按平台生成（macOS/Linux 软链，Windows junction/副本）。项目级 Skill 的 canonical 位于 `.agents/skills/`；全局挂载由 bootstrap 链到 `~/.claude/skills/` 与 `~/.codex/skills/`。双工具共用指令与记忆的机制说明见 `docs/workflows/记忆与多Agent.md`（配置已由 bootstrap 自动完成）。
