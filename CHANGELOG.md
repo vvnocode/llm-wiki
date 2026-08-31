@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.2 (2026-08-31)
+
+- `AGENTS.md`「提交与分支约定」增补两条：内容目录白名单（`wiki/` `inputs/` `outputs/` `state/` `.memory/`）直接在 `main` 提交，白名单外任何文件改动一律先建 worktree（按改动落点判定，不枚举任务类型）；一个 worktree 一个合入目标，维护者合一仓骨架改动以 `template` 为基线、经版本发布 merge 进 `main`。
+- `scripts/sync.sh`：`git add -A` 收紧为只暂存内容白名单目录。行为变化：白名单外的在途改动（含并行会话的骨架工作）不再被 ingest 顺手提交，需走 worktree；升级后无迁移动作。
+
 ## v0.2.1 (2026-08-31)
 
 - `AGENTS.md` 增补「提交与分支约定」节：main 唯一长期分支 + `.worktrees/` 短期分支；升级用 merge、禁止 rebase（冲突大先 worktree 演练）；统一提交前缀表（`ingest:` / `merge:` / `upgrade:` / `instance:` 等），实例不产生 `template:` 前缀。非破坏性变更，merge 即得，无迁移动作。

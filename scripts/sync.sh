@@ -10,6 +10,20 @@ cd "$ROOT"
 MSG="ingest: ${1:-自动同步}"
 BRANCH=$(git branch --show-current)
 
+# 只暂存内容白名单目录（与 AGENTS.md「提交与分支约定」同一清单）：
+# 白名单外的骨架改动必须走 worktree，不随 ingest 顺手提交——尤其防止
+# 并行会话的在途改动被 add -A 扫进本次提交。目录不存在或整目录被
+# gitignore 时跳过（目录内的忽略项由 git add 自行排除）。
+add_content() {
+    local d
+    for d in wiki inputs outputs state .memory; do
+        if [ -e "$d" ] && ! git check-ignore -q "$d"; then
+            git add -- "$d"
+        fi
+    done
+    return 0
+}
+
 if [ -z "$BRANCH" ]; then
     echo "✗ 处于分离 HEAD，不自动提交。请先切回分支。"
     exit 1
@@ -18,7 +32,7 @@ fi
 # 模板维护者合一仓（存在本地 template 分支）：origin 是模板发布远端，
 # 不接收实例分支——防止把个人内容推上模板仓（尤其公开仓）。
 if git show-ref --verify --quiet refs/heads/template; then
-    git add -A
+    add_content
     if git diff --cached --quiet; then
         echo "· 无变更可提交"
     else
@@ -27,7 +41,7 @@ if git show-ref --verify --quiet refs/heads/template; then
     fi
 elif git remote get-url origin >/dev/null 2>&1; then
     # 先收本地未暂存改动再 rebase，避免脏工作区阻塞
-    git add -A
+    add_content
     if ! git diff --cached --quiet; then
         git commit -m "$MSG"
     fi
@@ -38,7 +52,7 @@ elif git remote get-url origin >/dev/null 2>&1; then
     git push origin "$BRANCH"
     echo "· 已提交并推送到 origin/$BRANCH"
 else
-    git add -A
+    add_content
     if git diff --cached --quiet; then
         echo "· 无变更可提交"
     else
