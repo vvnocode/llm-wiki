@@ -69,5 +69,27 @@ class SkillContractTest(unittest.TestCase):
                 self.assertNotIn("~/.llm-wiki", body, f"{skill_file} 锚句外硬编码全局链")
 
 
+
+class ContentWhitelistTest(unittest.TestCase):
+    """AGENTS.md 内容白名单与 sync.sh add_content 清单必须同源一致（防止两处清单漂移）。"""
+
+    def test_whitelist_single_source(self):
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        m = re.search(r"内容目录——(.+?)——", agents)
+        self.assertIsNotNone(m, "AGENTS.md 未找到「内容目录——…——」白名单句")
+        agents_dirs = re.findall(r"`([^`]+)/`", m.group(1))
+        self.assertTrue(agents_dirs, "AGENTS.md 白名单句中未解析出目录")
+
+        sync = (ROOT / "scripts" / "sync.sh").read_text(encoding="utf-8")
+        sm = re.search(r"for d in ([^;]+); do", sync)
+        self.assertIsNotNone(sm, "sync.sh 未找到 add_content 白名单循环")
+        sync_dirs = sm.group(1).split()
+
+        self.assertEqual(
+            sorted(agents_dirs), sorted(sync_dirs),
+            "AGENTS.md 与 sync.sh 的内容白名单不一致——两处必须同步修改",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
