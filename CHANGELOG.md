@@ -2,6 +2,12 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.4 (2026-09-01)
+
+- 兼容入口 `CLAUDE.md` 与项目级技能链接 `.claude/skills/`、`.codex/skills/` 改为入库（相对软链，git mode 120000），`.gitignore` 移除对应三条。此前它们只由 `bootstrap` 在仓库根生成且不入库，`git worktree add` 不会带出，worktree 内的会话因此读不到本仓 `AGENTS.md`（Claude 侧经 `CLAUDE.md` 发现），项目级技能也不注册。`bootstrap.sh` 的 `ensure_link` 遇已就位软链直接跳过，`bootstrap.ps1` 把占位文本判为过期副本后刷新，两者均无需改动。
+- 迁移：无动作。升级前实例侧这三者处于 `.gitignore` 忽略状态（非 untracked），merge 直接覆盖为入库软链，不触发 untracked 保护。已实测本地软链指向与入库一致、及故意指向他处两种情况，均 merge 成功且结果正确、工作区干净。
+- 已知副作用（Windows 未启用 `core.symlinks`）：检出得到内容为目标路径的占位文本，原有副本会被 merge 覆盖；重跑 `bootstrap.ps1` 即把占位文本判为过期副本并刷新，功能恢复。但此后 `CLAUDE.md` 在 git 中表现为已修改，需 `git update-index --skip-worktree CLAUDE.md` 或启用开发者模式，避免副本被误提交回 `template`。此项未在 Windows 实机核验。
+
 ## v0.2.3 (2026-08-31)
 
 - `AGENTS.md`「提交与分支约定」补齐 v0.2.2 审计缺口：短期分支合入前须经用户确认；总则「合入 main」改为「合回其目标分支」，消除与合一仓骨架合回 `template` 的表述冲突；发布指定走 `scripts/release.sh`（禁止手工 push 发布远端）；实例段可收紧内容白名单，收紧者优先；合并在任务 worktree 内执行、根工作区始终留在 `main`。
