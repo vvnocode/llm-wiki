@@ -2,6 +2,13 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.5 (2026-09-02)
+
+- 新增 worktree 共享机制。`git worktree add` 只检出入库文件，`repos/` 克隆、`state/collectors/` 采集游标、`wiki/private/` 私有区、`.claude/settings.local.json`（Claude 记忆目录指向）等被 gitignore 的本机资产在新 worktree 里缺失，worktree 会话因此丢记忆、丢数据（v0.2.4 只解决了 `CLAUDE.md` 与技能链接）。现由 `config/worktree-share.conf` 列出共享前缀，`scripts/worktree.sh link` 把根工作区对应的被忽略条目软链进 worktree（不复制、不入库、写入落回根工作区），`scripts/hooks/post-checkout` 让裸 `git worktree add`（含 Claude Code 的 `.claude/worktrees/`）自动挂载；`worktree.sh add` / `remove` 为显式建立与回收入口，`remove` 先把 worktree 内新产生的被忽略文件回收到根工作区（不覆盖）再删除。`bootstrap.sh` 新增步骤 6 安装钩子（软链到 `.git/hooks/post-checkout`；`bootstrap.ps1` 以副本安装，待 Windows 真机验收）。回归测试 `tests/test_worktree_share.py`。
+- `.gitignore`：`state/collectors/` 改为 `state/collectors`。**尾斜杠目录规则只匹配真实目录、不匹配 worktree 里的软链**，软链会变成未跟踪文件并被 `sync.sh` 暂存；`worktree.sh` 对每条新建软链做 check-ignore 复核，未被忽略即撤销并告警。
+- 迁移：① 升级后重跑 `./scripts/bootstrap.sh`（Windows `bootstrap.ps1`）安装钩子；`core.hooksPath` 已被占用的仓库 bootstrap 只提示，需自行接入。② 实例段里要共享进 worktree 的被忽略目录（如采集正文、运行目录），其 `.gitignore` 规则去掉尾斜杠，并把前缀追加到 `config/worktree-share.conf` 文末。③ 已存在的 worktree 手动执行一次 `scripts/worktree.sh link <worktree路径>`。
+- 文档修正：`AGENTS.md`「多工具入口」、README 目录树与 FAQ 仍写着 `CLAUDE.md` 与技能链接「不入库、由 bootstrap 生成」，与 v0.2.4 不符，一并改正。
+
 ## v0.2.4 (2026-09-01)
 
 - 兼容入口 `CLAUDE.md` 与项目级技能链接 `.claude/skills/`、`.codex/skills/` 改为入库（相对软链，git mode 120000），`.gitignore` 移除对应三条。此前它们只由 `bootstrap` 在仓库根生成且不入库，`git worktree add` 不会带出，worktree 内的会话因此读不到本仓 `AGENTS.md`（Claude 侧经 `CLAUDE.md` 发现），项目级技能也不注册。`bootstrap.sh` 的 `ensure_link` 遇已就位软链直接跳过，`bootstrap.ps1` 把占位文本判为过期副本后刷新，两者均无需改动。

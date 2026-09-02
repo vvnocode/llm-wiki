@@ -51,7 +51,7 @@
 
 ## 提交与分支约定
 
-分支只有两类：**`main` 唯一长期分支**（知识、数据与实例配置的最终落点；没有远端也必须本地提交）；**短期任务分支**一律放 `.worktrees/{任务名}/`，验证后**经用户确认**再 `--no-ff` 合回其目标分支并删除（目标分支见下「一个 worktree 一个合入目标」，实例仓即 `main`）。模板升级直接在 `main` 上 merge（**禁止 rebase**——rebase 会重写 main 历史，破坏既有产出对提交的追溯，也会与远端历史分裂；merge 节点本身就是升级留痕）；预计冲突较大时先在 `.worktrees/upgrade-{版本}/` 演练，绿后再正式 merge。
+分支只有两类：**`main` 唯一长期分支**（知识、数据与实例配置的最终落点；没有远端也必须本地提交）；**短期任务分支**一律放 `.worktrees/{任务名}/`，验证后**经用户确认**再 `--no-ff` 合回其目标分支并删除（目标分支见下「一个 worktree 一个合入目标」，实例仓即 `main`）。模板升级直接在 `main` 上 merge（**禁止 rebase**——rebase 会重写 main 历史，破坏既有产出对提交的追溯，也会与远端历史分裂；merge 节点本身就是升级留痕）；预计冲突较大时先在 `.worktrees/upgrade-{版本}/` 演练，绿后再正式 merge。建 worktree 用 `scripts/worktree.sh add <任务名> [基线]`（裸 `git worktree add` 亦可，bootstrap 安装的 post-checkout 钩子同样生效）：`repos/` 克隆、采集游标、私有区、`.claude/settings.local.json`（记忆目录指向）等被 gitignore 的本机资产按 `config/worktree-share.conf` 软链进 worktree，不复制、不入库；收尾用 `scripts/worktree.sh remove <任务名>` 先把 worktree 内新产生的被忽略文件回收到根工作区再删除。共享目录的 `.gitignore` 规则不带尾斜杠（尾斜杠不匹配软链）。
 
 **何时必须建短期分支**：内容目录——`wiki/`、`inputs/`、`outputs/`、`state/`、`.memory/`——的写入直接在 `main` 提交，`sync.sh` 即此路径；**白名单之外的任何文件改动，不论大小，一律先建 worktree**（模板升级 merge 按上一段执行，不属此列）。按改动落点而非任务类型判定：枚举「哪些任务要建」是开放清单，会随功能新增而漏；新增功能必然改动白名单外的文件，天然落入 worktree。一次改动同时涉及内容与骨架的，整体走 worktree。实例可在实例段**收紧**白名单（如要求某类产出也走 worktree），两段不一致时按收紧者执行。
 
@@ -71,7 +71,7 @@
 
 ## 多工具入口
 
-`AGENTS.md` 是唯一指令正本；`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接不入库，由 bootstrap 按平台生成（macOS/Linux 软链，Windows junction/副本）。项目级 Skill 的 canonical 位于 `.agents/skills/`；全局挂载由 bootstrap 链到 `~/.claude/skills/` 与 `~/.codex/skills/`。双工具共用指令与记忆的机制说明见 `docs/workflows/记忆与多Agent.md`（配置已由 bootstrap 自动完成）。
+`AGENTS.md` 是唯一指令正本；`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接以相对软链入库（v0.2.4 起，保证 worktree 内可见），bootstrap 只在缺失或 Windows 无 symlink 权限时按平台补建（junction/副本）。项目级 Skill 的 canonical 位于 `.agents/skills/`；全局挂载由 bootstrap 链到 `~/.claude/skills/` 与 `~/.codex/skills/`。双工具共用指令与记忆的机制说明见 `docs/workflows/记忆与多Agent.md`（配置已由 bootstrap 自动完成）。
 
 ## 语言与文风
 
