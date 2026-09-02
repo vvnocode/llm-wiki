@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.6 (2026-09-02)
+
+- `bootstrap.sh` 执行位规则收窄：只给首行为 `#!` 的文件加执行位（`scripts/*.sh`、`scripts/*.py`、`scripts/hooks/*`），无 shebang 的纯模块与被 source 的片段保持入库模式。此前对 `scripts/*.sh scripts/*.py` 一律 `chmod +x`，实例里以 644 入库的文件每跑一次 bootstrap 就被翻成 755，根工作区平白多出模式变更。回归测试 `tests/test_bootstrap_chmod.py`。
+- 迁移：带 shebang 却以 644 入库的实例脚本请把执行位提交一次（`chmod +x` 后 `git add`），否则规则照样会翻动；无 shebang 的文件此后不再被改动。
+
 ## v0.2.5 (2026-09-02)
 
 - 新增 worktree 共享机制。`git worktree add` 只检出入库文件，`repos/` 克隆、`state/collectors/` 采集游标、`wiki/private/` 私有区、`.claude/settings.local.json`（Claude 记忆目录指向）等被 gitignore 的本机资产在新 worktree 里缺失，worktree 会话因此丢记忆、丢数据（v0.2.4 只解决了 `CLAUDE.md` 与技能链接）。现由 `config/worktree-share.conf` 列出共享前缀，`scripts/worktree.sh link` 把根工作区对应的被忽略条目软链进 worktree（不复制、不入库、写入落回根工作区），`scripts/hooks/post-checkout` 让裸 `git worktree add`（含 Claude Code 的 `.claude/worktrees/`）自动挂载；`worktree.sh add` / `remove` 为显式建立与回收入口，`remove` 先把 worktree 内新产生的被忽略文件回收到根工作区（不覆盖）再删除。`bootstrap.sh` 新增步骤 6 安装钩子（软链到 `.git/hooks/post-checkout`；`bootstrap.ps1` 以副本安装，待 Windows 真机验收）。回归测试 `tests/test_worktree_share.py`。
