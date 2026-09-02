@@ -174,8 +174,16 @@ if [ "$MODE" = global ]; then
     done
 fi
 
-chmod +x scripts/*.sh scripts/*.py 2>/dev/null || true
-echo "· 脚本已加执行权限"
+# 脚本执行位：只给首行是 #! 的文件加（含 scripts/hooks/）。无 shebang 的纯模块与被 source 的片段保持入库模式，
+# 否则以 644 入库的文件每跑一次 bootstrap 就被翻成 755，根工作区平白多出模式变更。
+EXEC_ADDED=0
+for f in scripts/*.sh scripts/*.py scripts/hooks/*; do
+    [ -f "$f" ] || continue
+    [ "$(head -c 2 "$f" 2>/dev/null)" = '#!' ] || continue
+    [ -x "$f" ] && continue
+    chmod +x "$f" && EXEC_ADDED=$((EXEC_ADDED + 1))
+done
+echo "· 脚本执行位：新加 ${EXEC_ADDED} 个（只处理带 shebang 的文件）"
 
 # 8) 远端指引（不代做）
 echo
