@@ -48,9 +48,10 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 
 1. （仅全局模式）发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction）→ 实例目录；
 2. （仅全局模式）全局 Skill 链接（Claude Code、Codex 各四个：ingest / query / lint / learn）；
-3. 仓内多工具入口（`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接——均不入库，按平台生成，Windows `core.symlinks=false` 的占位文件问题不存在）；
+3. 仓内多工具入口（`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接已随仓入库，bootstrap 只补缺；Windows `core.symlinks=false` 检出的占位文本由 `bootstrap.ps1` 判为过期副本后刷新）；
 4. 仓库内记忆配置（Claude `autoMemoryDirectory`；Codex 关闭外部记忆，机制见 `docs/workflows/记忆与多Agent.md`）；
-5. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
+5. worktree 共享钩子 `.git/hooks/post-checkout`（`git worktree add` 后按 `config/worktree-share.conf` 把被 gitignore 的本机资产软链进新 worktree，见「模板升级与维护」）；
+6. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
 
 **接入全局指令**（仅全局模式；这是全局形态唯一的外部前置——让「全局知识工作台」路由段进入你的全局规则，二选一）：
 
@@ -119,13 +120,13 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 
 ```
 llm-wiki/
-├── AGENTS.md                  # 工作台自身指令正本（CLAUDE.md 兼容入口由 bootstrap 生成）
+├── AGENTS.md                  # 工作台自身指令正本（CLAUDE.md 为入库的兼容软链）
 ├── SETUP-FOR-AI.md            # 面向 AI 助手的部署指引
 ├── docs/
 │   ├── schemas/               # wiki.md（wiki 契约）、分区与共享.md（三级判据）
 │   └── workflows/             # 工作方式、新域落地、多 Agent 记忆
 ├── .agents/skills/            # Skill 正本：llm-wiki-{ingest,query,lint,learn}
-├── scripts/                   # bootstrap.sh、bootstrap.ps1、sync.sh、lint-wiki.py、new-domain.sh
+├── scripts/                   # bootstrap.sh、bootstrap.ps1、sync.sh、lint-wiki.py、new-domain.sh、worktree.sh
 ├── tests/                     # Skill 契约测试（单一真源、全局路径约定）
 ├── wiki/
 │   ├── index.md               # 根索引（两级索引的第一级）
@@ -135,6 +136,7 @@ llm-wiki/
 │   └── private/               # 私有区（gitignore，物理不出本机）
 ├── inputs/manual/             # 不可复得的口述与截图原料
 ├── config/registry.md         # 项目仓库、域扩展、外部文档的唯一登记处
+├── config/worktree-share.conf # 软链进任务 worktree 的本机资产清单（repos/、采集游标、私有区、settings.local.json）
 ├── outputs/                   # 可再生成的交付物（不是 wiki）
 └── state/                     # 本机运行状态（不作证据）
 ```
@@ -158,6 +160,8 @@ git fetch upstream && git merge upstream/main
 
 发布安全：发布用 `scripts/release.sh`（自动先跑 `release-check.sh` 三类扫描：内网 IP、凭证模式、本地敏感词表，再推全部发布远端）；并安装维护者 hook `cp scripts/hooks/pre-push .git/hooks/`——它保证推往发布远端的任何 ref 都在 template 历史内（实例分支推不出去，IDE 误点也不行）并强制敏感扫描。词表 `.release-check-local` 留在本机不入库。
 
+任务 worktree：白名单外改动一律在 `.worktrees/{任务名}/` 进行（`AGENTS.md`「提交与分支约定」）。`git worktree add` 只检出入库文件，`repos/` 克隆、采集游标、私有区、`.claude/settings.local.json`（记忆目录指向）等被 gitignore 的本机资产会在新 worktree 里缺失；bootstrap 安装的 post-checkout 钩子（或显式 `scripts/worktree.sh add <任务名>`）按 `config/worktree-share.conf` 把它们软链进 worktree，`scripts/worktree.sh remove <任务名>` 收尾时先回收 worktree 内新产生的被忽略文件再删除。共享目录的 `.gitignore` 规则不带尾斜杠——尾斜杠只匹配真实目录，不匹配软链；脚本对每条软链做 check-ignore 复核，未被忽略即撤销并告警。
+
 ## 域扩展
 
 内核不含任何业务采集器。需要接入采集类数据源（聊天工具、项目管理系统、邮箱等）时，按 `docs/workflows/新业务域落地.md` 建立独立的域扩展（采集脚本 + 口径 + 模板三件套，可以是独立仓库），并在 `config/registry.md` 登记路径与敏感级别。标「受限」的域，其数据与分析结论留在域内，本仓 index 只挂入口不下钻。
@@ -173,7 +177,7 @@ git fetch upstream && git merge upstream/main
 - **为什么私有区用 gitignore 而不是加密或独立分支？** 需要的保证是「不出本机」，gitignore 是达成它最简单且不可能误推的机制；代价（换机不随 git 迁移）与私有区的预期体量相称。
 - **为什么不让团队共写一个 wiki 仓？** 多人实时共写带来 git 冲突与权责不清，历史上同类尝试（共建文档库）多死于此；「每人一仓 + 中心编译」让写入永远单人、合并永远由编译器做。
 - **为什么 Skill 路径全部绝对化？** 全局挂载后 Agent 的工作目录在任意项目里，相对路径必然解析失败；契约测试禁止裸相对路径回归。
-- **为什么仓库里没有 CLAUDE.md 和 `.claude/skills/`？** 它们是平台相关链接，入库会在 Windows（`core.symlinks=false`）checkout 成无效占位文件；改由 bootstrap 按平台生成，仓库保持平台无关。
+- **为什么 CLAUDE.md、`.claude/skills/` 入库，`.claude/settings.local.json` 却不入库？** 前者是相对软链，入库后任意 clone 与 worktree 都能解析（v0.2.4 前由 bootstrap 生成，worktree 里因此缺失）；Windows 未启用 `core.symlinks` 时检出为占位文本，重跑 bootstrap 刷新。后者含本机绝对路径，只能本机生成，和 `repos/`、采集游标、私有区一样按 `config/worktree-share.conf` 软链进各任务 worktree。
 
 ## 安全边界
 

@@ -14,8 +14,8 @@
 
 ## 本仓库已经做好的
 
-1. `AGENTS.md` 是唯一正本；`CLAUDE.md` 由 `bootstrap.sh` 链过去。
-2. Claude 的记忆被指到 `.memory/`（本机绝对路径写在不入库的 `settings.local.json`）。
+1. `AGENTS.md` 是唯一正本；`CLAUDE.md` 是入库的相对软链（bootstrap 只补缺）。
+2. Claude 的记忆被指到 `.memory/`（本机绝对路径写在不入库的 `settings.local.json`）。任务 worktree 里没有这个文件，由 bootstrap 安装的 post-checkout 钩子按 `config/worktree-share.conf` 软链根工作区那份，worktree 会话因此读写同一份记忆。
 3. Codex 自带记忆三项全关，改由 `AGENTS.md` 约束它往 `.memory/` 写。
 4. 以上配置全部由 `bootstrap.sh` 自动完成并保持幂等；本文件记录机制与陷阱，供排查时查阅。
 
@@ -43,7 +43,8 @@
 
 | 陷阱 | 后果 | 应对 |
 |---|---|---|
-| 没有 `CLAUDE.md` | Claude 完全不读项目规则，无任何提示 | bootstrap 会建软链 |
+| 没有 `CLAUDE.md` | Claude 完全不读项目规则，无任何提示 | 已入库；缺失时 bootstrap 补建 |
+| 裸 `git worktree add` 出来的 worktree 里开会话 | `settings.local.json` 不在，记忆目录退回工具默认位置，仓内记忆整份不可见；`repos/`、采集游标、私有区同样缺失 | bootstrap 装的 post-checkout 钩子自动软链；老 worktree 手动 `scripts/worktree.sh link <路径>` |
 | Codex 项目未被信任 | 项目级 `.codex/` 整体不加载，静默失效 | `~/.codex/config.toml` 加 trusted |
 | 用 `codex doctor` 验证项目配置 | doctor 只报全局值，会得出反向结论 | 按下方「验证」节直接问 Codex 或查生效配置 |
 | 只关 `generate_memories` | `add_ad_hoc_note` 仍往仓库外写 | 三项一起关 |

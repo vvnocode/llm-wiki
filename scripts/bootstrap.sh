@@ -2,13 +2,20 @@
 # 一键初始化个人实例（双形态）。用法：bootstrap.sh [--mode global|project]
 #   global  全局工作台：~/.llm-wiki 发现软链 + 全局 Skill 软链（Claude / Codex）+ 仓内配置
 #   project 专项工作台：仅仓内配置（CLAUDE.md 兼容软链、本机记忆路径、
-#           项目级 Skill 软链、脚本权限、远端指引），不改动任何全局配置
+#           项目级 Skill 软链、worktree 共享钩子、脚本权限、远端指引），不改动任何全局配置
 # 缺省 --mode 时按发现链探测；全新实例交互询问，非交互环境必须显式传参。
 # 不读取、不写入用户主目录里的凭据文件。
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
+
+# 只在根工作区运行：附属 worktree 里 .claude/settings.local.json 是指向根工作区的软链（见 config/worktree-share.conf），
+# 在这里改写会把根工作区的记忆路径指到 worktree；全局发现链也会指错。
+if [ "$(cd "$(git rev-parse --git-dir)" && pwd -P)" != "$(cd "$(git rev-parse --git-common-dir)" && pwd -P)" ]; then
+    echo "✗ 当前是附属 worktree（$ROOT），请在根工作区运行 bootstrap：$(git worktree list --porcelain | head -1 | sed 's/^worktree //')" >&2
+    exit 1
+fi
 
 echo "═══ llm-wiki bootstrap ═══"
 echo "实例：$ROOT"
@@ -141,7 +148,22 @@ for skill in llm-wiki-ingest llm-wiki-query llm-wiki-lint llm-wiki-learn; do
     link_skill_local "$skill"
 done
 
-# 6) 全局 Skill 挂载（仅全局模式）：任意项目的会话都能路由到这四个 skill。
+# 6) worktree 共享钩子：git worktree add 后自动把根工作区的本机资产（repos/、采集游标、私有区、
+#    settings.local.json）软链进新 worktree，清单见 config/worktree-share.conf。
+#    钩子以软链安装，模板升级后自动生效；core.hooksPath 被占用时只提示不代做。
+if [ -n "$(git config --get core.hooksPath || true)" ]; then
+    echo "⚠ 本仓 core.hooksPath 已设置，.git/hooks 不生效：请自行把 scripts/hooks/post-checkout 接入该钩子目录"
+else
+    HOOKS_DIR=$(git rev-parse --git-path hooks)
+    mkdir -p "$HOOKS_DIR"
+    if [ "$HOOKS_DIR" = ".git/hooks" ]; then
+        ensure_link "$HOOKS_DIR/post-checkout" "../../scripts/hooks/post-checkout"
+    else
+        ensure_link "$HOOKS_DIR/post-checkout" "$ROOT/scripts/hooks/post-checkout"   # .git 不在仓根（本仓自身是别人的 worktree）时用绝对路径
+    fi
+fi
+
+# 7) 全局 Skill 挂载（仅全局模式）：任意项目的会话都能路由到这四个 skill。
 #    canonical 仍是本仓 .agents/skills。
 if [ "$MODE" = global ]; then
     for tool_root in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
@@ -155,7 +177,7 @@ fi
 chmod +x scripts/*.sh scripts/*.py 2>/dev/null || true
 echo "· 脚本已加执行权限"
 
-# 7) 远端指引（不代做）
+# 8) 远端指引（不代做）
 echo
 if ! git remote get-url upstream >/dev/null 2>&1; then
     echo "── 模板升级通道（可选）──"

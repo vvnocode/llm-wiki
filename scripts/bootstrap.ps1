@@ -7,7 +7,7 @@
 #
 # 做的事：
 #   %USERPROFILE%\.llm-wiki 发现 junction、全局 Skill junction（Claude / Codex）、
-#   CLAUDE.md 兼容入口（symlink，失败降级为副本）、本机记忆路径、项目级 Skill junction、远端指引。
+#   CLAUDE.md 兼容入口（symlink，失败降级为副本）、本机记忆路径、项目级 Skill junction、worktree 共享钩子副本、远端指引。
 # 不读取、不写入用户凭据文件。兼容 Windows PowerShell 5.1 与 PowerShell 7。
 #
 # 用法：在仓库根目录执行  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 [-Mode global|project]
@@ -23,6 +23,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $Root
+
+# 只在根工作区运行（与 bootstrap.sh 同构）：附属 worktree 里 settings.local.json 是指向根工作区的链接，改写会污染根工作区。
+$gitDir = (Resolve-Path (git rev-parse --git-dir)).Path
+$commonDir = (Resolve-Path (git rev-parse --git-common-dir)).Path
+if ($gitDir -ne $commonDir) {
+    Write-Host "! 当前是附属 worktree（$Root），请在根工作区运行 bootstrap"
+    exit 1
+}
 
 Write-Host "=== llm-wiki bootstrap (Windows) ==="
 Write-Host "实例：$Root"
@@ -151,6 +159,19 @@ foreach ($destRoot in $destRoots) {
     foreach ($s in $skills) {
         Ensure-DirLink -Link (Join-Path $destRoot $s) -Target (Join-Path $canonRoot $s)
     }
+}
+
+# 6b) worktree 共享钩子：git worktree add 后自动把本机资产软链进新 worktree（清单 config\worktree-share.conf）。
+#     Windows 以副本安装（模板升级后重跑 bootstrap 刷新）；worktree.sh 需在 Git Bash 下运行且账户有 symlink 权限。待 Windows 真机验收。
+$hookSrc = Join-Path $Root 'scripts\hooks\post-checkout'
+$hookDir = Join-Path $Root '.git\hooks'
+$hookDst = Join-Path $hookDir 'post-checkout'
+if ((Test-Path -LiteralPath $hookDst) -and ((Get-FileHash -LiteralPath $hookDst).Hash -eq (Get-FileHash -LiteralPath $hookSrc).Hash)) {
+    Write-Host "- .git\hooks\post-checkout 已是最新"
+} else {
+    New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
+    Copy-Item -LiteralPath $hookSrc -Destination $hookDst -Force
+    Write-Host "- 已安装 .git\hooks\post-checkout（worktree 共享钩子）"
 }
 
 # 7) 远端与接入指引（不代做）

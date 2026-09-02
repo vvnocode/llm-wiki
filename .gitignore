@@ -12,7 +12,8 @@ repos/*
 wiki/private/*
 !wiki/private/README.md
 # 采集游标本机私有；产出水位线若有则入 Git
-state/collectors/
+# （共享进 worktree 的目录规则不带尾斜杠：尾斜杠只匹配真实目录、不匹配 worktree 里的软链；清单见 config/worktree-share.conf）
+state/collectors
 # 任务 worktree（开发纪律要求，不入库）
 .worktrees/
 .release-check-local

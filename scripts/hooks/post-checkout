@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# post-checkout 钩子：git worktree add 检出完成后，自动把根工作区的本机资产软链进新 worktree
+# （清单 config/worktree-share.conf，动作由 scripts/worktree.sh link 完成）。
+# 安装：bootstrap.sh 把本文件软链到 .git/hooks/post-checkout（Windows 由 bootstrap.ps1 复制副本）。
+# 参数：<旧 HEAD> <新 HEAD> <flag>；flag=1 为分支检出（worktree add、checkout 分支），flag=0 为文件检出。
+# 只在「分支检出 且 当前是附属 worktree」时动作；根工作区的任何 checkout 直接返回。
+# post-checkout 的退出码不影响检出结果，这里也始终返回 0，只把问题打印出来。
+[ "${3:-0}" = "1" ] || exit 0
+gitdir=$(cd "$(git rev-parse --git-dir)" && pwd -P)
+common=$(cd "$(git rev-parse --git-common-dir)" && pwd -P)
+[ "$gitdir" != "$common" ] || exit 0
+root=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+script="$root/scripts/worktree.sh"
+if [ -f "$script" ]; then
+    bash "$script" link "$PWD" || echo "⚠ post-checkout：worktree 共享挂载失败，可手动执行：bash $script link $PWD"
+else
+    echo "⚠ post-checkout：未找到 $script，跳过 worktree 共享挂载"
+fi
+exit 0
