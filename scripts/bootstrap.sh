@@ -164,9 +164,11 @@ else
 fi
 
 # 7) 全局 Skill 挂载（仅全局模式）：任意项目的会话都能路由到这四个 skill。
-#    canonical 仍是本仓 .agents/skills。
+#    canonical 仍是本仓 .agents/skills。三个发现根缺一不可：~/.agents/skills 是跨工具的
+#    约定俗成位（dsh、Cline、Dexto、Kimi、Loaf、Warp、Zed 等直接读它），而 Claude 与 Codex
+#    各自只认自己的 skills 目录，不扫 ~/.agents/skills，故三处都要挂。
 if [ "$MODE" = global ]; then
-    for tool_root in "$HOME/.claude/skills" "$HOME/.codex/skills"; do
+    for tool_root in "$HOME/.agents/skills" "$HOME/.claude/skills" "$HOME/.codex/skills"; do
         mkdir -p "$tool_root"
         for skill in llm-wiki-ingest llm-wiki-query llm-wiki-lint llm-wiki-learn; do
             ensure_link "$tool_root/$skill" "$HOME/.llm-wiki/.agents/skills/$skill"

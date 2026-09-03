@@ -79,7 +79,7 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 2. 验证结果（测试与 lint 的真实输出结论）；
 3. 全局指令改了哪些文件（或用户选择了跳过 / 专项形态不适用）；
 4. 怎么开始用：全局形态在任意项目里正常提问，排障/分析/学习类任务会自动先查 wiki，收口默认写回（说「不用写」跳过）；专项形态 cd 进实例目录后同样提问即可；
-5. 如何卸载：全局形态删除 `~/.llm-wiki` 链接、`~/.claude/skills/llm-wiki-*` 与 `~/.codex/skills/llm-wiki-*` 链接、全局规则里的路由段；专项形态无任何全局痕迹。实例目录本身按用户意愿保留或删除。
+5. 如何卸载：全局形态删除 `~/.llm-wiki` 链接，`~/.agents/skills/llm-wiki-*`、`~/.claude/skills/llm-wiki-*`、`~/.codex/skills/llm-wiki-*` 三处链接，以及全局规则里的路由段；专项形态无任何全局痕迹。实例目录本身按用户意愿保留或删除。
 
 ## 故障排查
 
