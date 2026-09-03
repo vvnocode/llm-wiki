@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.9 (2026-09-03)
+
+- 全局 Skill 挂载补上第三处发现根 `~/.agents/skills/`。此前 `bootstrap.sh` / `bootstrap.ps1` 的全局模式只链 `~/.claude/skills/` 与 `~/.codex/skills/`，而 `~/.agents/skills` 是跨工具约定俗成的 canonical 位，dsh、Cline、Dexto、Kimi、Loaf、Warp、Zed 等直接读它——这些 Agent 在全局形态下发现不到本工作台的四个 skill。三处均软链到 `~/.llm-wiki/.agents/skills/<name>`，仓内 canonical 不变。回归测试 `tests/test_bootstrap_global_mount.py`（覆盖三根挂载与重跑幂等）。
+- 迁移：升级后在实例根工作区重跑 `./scripts/bootstrap.sh`（Windows `bootstrap.ps1`）补建；bootstrap 只增不减，已有链接不动。全局转专项的卸载清单相应由 8 条增至 12 条。
+
 ## v0.2.8 (2026-09-03)
 
 - 补入 `repos/.gitkeep`。`.gitignore` 早已写有 `repos/*` 与 `!repos/.gitkeep`，意图是让空目录 `repos/` 随模板入库，但模板从未提交这个占位文件，新实例化出的仓库没有 `repos/` 目录；全局实例 2026-08-28 自行补过一次，模板与实例因此多出一处骨架差异。

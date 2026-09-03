@@ -152,7 +152,13 @@ $skills = @('llm-wiki-ingest', 'llm-wiki-query', 'llm-wiki-lint', 'llm-wiki-lear
 $canonRoot = Join-Path $Root '.agents\skills'
 $destRoots = @((Join-Path $Root '.claude\skills'), (Join-Path $Root '.codex\skills'))
 if ($Mode -eq 'global') {
-    $destRoots += @((Join-Path $env:USERPROFILE '.claude\skills'), (Join-Path $env:USERPROFILE '.codex\skills'))
+    # 三个发现根缺一不可：%USERPROFILE%\.agents\skills 是跨工具的约定俗成位（dsh、Cline、Dexto、
+    # Kimi、Loaf、Warp、Zed 等直接读它），Claude 与 Codex 只认自己的 skills 目录、不扫 .agents\skills。
+    $destRoots += @(
+        (Join-Path $env:USERPROFILE '.agents\skills'),
+        (Join-Path $env:USERPROFILE '.claude\skills'),
+        (Join-Path $env:USERPROFILE '.codex\skills')
+    )
 }
 foreach ($destRoot in $destRoots) {
     New-Item -ItemType Directory -Path $destRoot -Force | Out-Null

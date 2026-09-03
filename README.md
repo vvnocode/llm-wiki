@@ -103,14 +103,14 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 兼容分两层：
 
 - **L1 规则路由（必需，决定「适不适用」）**：工具能读取用户级 Markdown 规则文件即可。路由段让模型按路径读 `~/.llm-wiki/wiki/index.md` 与各 `SKILL.md`——不依赖任何工具专有的 Skill 机制。
-- **L2 原生 Skill 挂载（增强，可选）**：工具有全局技能目录的，bootstrap 额外建链接，获得自动技能路由。
+- **L2 原生 Skill 挂载（增强，可选）**：工具有全局技能目录的，bootstrap 额外建链接，获得自动技能路由。全局形态挂载 `~/.agents/skills/`、`~/.claude/skills/`、`~/.codex/skills/` 三处：前者是跨工具约定俗成的发现根（dsh、Cline、Dexto、Kimi、Loaf、Warp、Zed 等直接读它），Claude 与 Codex 不扫它、只认自己的目录，故三处都挂，均指向仓内 canonical。
 
 | 工具 | 用户级规则入口 | L1 路由 | L2 Skill 挂载 |
 |---|---|---|---|
 | Claude Code | `~/.claude/CLAUDE.md` | ✓ | ✓ `~/.claude/skills/` |
 | Codex | `~/.codex/AGENTS.md` | ✓ | ✓ `~/.codex/skills/` |
 | OpenCode | `~/.config/opencode/AGENTS.md` | ✓ | —（走 L1 文件引用） |
-| DeepSeek Harness | `$DSH_HOME/AGENTS.md`（默认 `~/.dsh/AGENTS.md`） | ✓ | —（走 L1 文件引用） |
+| DeepSeek Harness | `$DSH_HOME/AGENTS.md`（默认 `~/.dsh/AGENTS.md`） | ✓ | ✓ `~/.agents/skills/` |
 | Gemini CLI | `~/.gemini/GEMINI.md` | ✓ | —（走 L1 文件引用） |
 | Cursor | 设置中的 User Rules | ✓（粘贴路由段） | — |
 
@@ -144,7 +144,7 @@ llm-wiki/
 ## 模式切换
 
 - **专项 → 全局**：在实例目录重跑 `./scripts/bootstrap.sh --mode global`（Windows：`-Mode global`），补建发现链与全局挂载，再按「接入全局指令」粘贴路由段。前提：本机全局位未被其他实例占用。
-- **全局 → 专项**：手工删除 `~/.llm-wiki` 链接、`~/.claude/skills/llm-wiki-*` 与 `~/.codex/skills/llm-wiki-*` 共 8 条链接，并移除全局规则中的路由段；实例目录与内容不动。bootstrap 只增不减，不代做删除。
+- **全局 → 专项**：手工删除 `~/.llm-wiki` 链接，以及 `~/.agents/skills/llm-wiki-*`、`~/.claude/skills/llm-wiki-*`、`~/.codex/skills/llm-wiki-*` 共 12 条链接，并移除全局规则中的路由段；实例目录与内容不动。bootstrap 只增不减，不代做删除。
 
 ## 模板升级与维护
 
