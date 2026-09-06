@@ -109,7 +109,7 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 |---|---|---|---|
 | Claude Code | `~/.claude/CLAUDE.md` | ✓ | ✓ `~/.claude/skills/` |
 | Codex | `~/.codex/AGENTS.md` | ✓ | ✓ `~/.codex/skills/` |
-| OpenCode | `~/.config/opencode/AGENTS.md` | ✓ | —（走 L1 文件引用） |
+| OpenCode | `~/.config/opencode/AGENTS.md` | ✓ | ✓ 经 `~/.claude/skills/` 与 `~/.agents/skills/`（它也扫这两处，不必另挂 `~/.config/opencode/skills/`） |
 | DeepSeek Harness | `$DSH_HOME/AGENTS.md`（默认 `~/.dsh/AGENTS.md`） | ✓ | ✓ `~/.agents/skills/` |
 | Gemini CLI | `~/.gemini/GEMINI.md` | ✓ | —（走 L1 文件引用） |
 | Cursor | 设置中的 User Rules | ✓（粘贴路由段） | — |
