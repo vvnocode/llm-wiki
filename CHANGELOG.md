@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.2.10 (2026-09-06)
+
+- README「工具兼容性」表修正：OpenCode 的 L2 Skill 挂载此前写成「无、走 L1 文件引用」，按 opencode 1.18.18 二进制核对它同时扫 `~/.claude/skills/` 与 `~/.agents/skills/`，现有三处全局挂载已覆盖，不需要另挂 `~/.config/opencode/skills/`。仅文档，脚本与测试不变。
+- 迁移：无动作。
+
 ## v0.2.9 (2026-09-03)
 
 - 全局 Skill 挂载补上第三处发现根 `~/.agents/skills/`。此前 `bootstrap.sh` / `bootstrap.ps1` 的全局模式只链 `~/.claude/skills/` 与 `~/.codex/skills/`，而 `~/.agents/skills` 是跨工具约定俗成的 canonical 位，dsh、Cline、Dexto、Kimi、Loaf、Warp、Zed 等直接读它——这些 Agent 在全局形态下发现不到本工作台的四个 skill。三处均软链到 `~/.llm-wiki/.agents/skills/<name>`，仓内 canonical 不变。回归测试 `tests/test_bootstrap_global_mount.py`（覆盖三根挂载与重跑幂等）。
