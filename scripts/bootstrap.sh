@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # 一键初始化个人实例（双形态）。用法：bootstrap.sh [--mode global|project]
 #   global  全局工作台：~/.llm-wiki 发现软链 + 全局 Skill 软链（Claude / Codex）+ 仓内配置
-#   project 专项工作台：仅仓内配置（CLAUDE.md 兼容软链、本机记忆路径、
-#           项目级 Skill 软链、worktree 共享钩子、脚本权限、远端指引），不改动任何全局配置
+#   project 专项工作台：仅仓内配置（多工具入口与仓内记忆、项目级 Skill 软链、
+#           worktree 共享钩子、脚本权限、远端指引），不改动任何全局配置
 # 缺省 --mode 时按发现链探测；全新实例交互询问，非交互环境必须显式传参。
+# 多工具入口（CLAUDE.md 引用行）与仓内记忆（.memory/、Claude 记忆路径、Codex 记忆开关）不由本脚本自己写，
+# 委托公开 skill agent-memory-setup 的 setup.sh（步骤 3）；未安装时先装到全局 Skill 发现根，装 skill 本身幂等。
 # 不读取、不写入用户主目录里的凭据文件。
 set -euo pipefail
 
@@ -87,47 +89,47 @@ if [ "$MODE" = global ]; then
     ensure_link "$LINK" "$ROOT"
 fi
 
-# 2) 兼容入口与目录
-ensure_link CLAUDE.md AGENTS.md
+# 2) 目录骨架
 mkdir -p .claude/skills .codex/skills .agents/skills repos
 : > repos/.gitkeep 2>/dev/null || true
 
-# 3) Claude 本机记忆路径（含绝对路径，文件被 gitignore）
-SETTINGS=".claude/settings.local.json"
-python3 - "$ROOT" "$SETTINGS" <<'PY'
-import json, os, sys
-root, path = sys.argv[1], sys.argv[2]
-want = f"{root}/.memory"
-cur = {}
-if os.path.exists(path):
-    try:
-        cur = json.load(open(path, encoding="utf-8"))
-    except json.JSONDecodeError:
-        cur = {}
-if cur.get("autoMemoryDirectory") == want:
-    print(f"· {path} 路径已是本机")
-else:
-    cur["autoMemoryDirectory"] = want
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(cur, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    print(f"· 已写 {path} （autoMemoryDirectory → {want}）")
-PY
-
-# 4) Codex 项目级记忆配置
-if [ ! -f .codex/config.toml ]; then
-    cat > .codex/config.toml <<'TOML'
-# 记忆统一存放在仓库内 .memory/，写入规则见 AGENTS.md。
-# 生效前提：本目录须在 ~/.codex/config.toml 里被标记为 trusted。
-[memories]
-generate_memories = false
-use_memories = false
-dedicated_tools = false
-TOML
-    echo "· 已写 .codex/config.toml"
+# 3) 多工具入口与仓内记忆：委托公开 skill agent-memory-setup（正本 GitHub vvnocode/skills）。
+#    它做四件事，全部幂等、只补缺：CLAUDE.md 只含一行 @AGENTS.md 引用（v0.3.0 起取代入库软链——软链在 Windows
+#    默认 core.symlinks=false 下检出后是只写着 "AGENTS.md" 的文本文件，旧软链由它自动迁移）；.memory/MEMORY.md；
+#    Claude 的 autoMemoryDirectory 指向仓内 .memory（写在不入库的 settings.local.json）；Codex 自带记忆三项全关。
+#    机制对照、逐工具验证方法与陷阱见该 skill 的 SKILL.md，本仓不再复述。
+#    不传 --with-rule：记忆读写规则由跨工具全局规则承担（本仓 AGENTS.md 已提及 .memory/，传了也会被跳过）。
+#    查找顺序：AGENT_MEMORY_SETUP 显式路径 → ~/.agents/skills → ~/.claude/skills → ~/.codex/skills；
+#    都没有就用 skills 仓的一行安装命令把 skill 装到三处发现根（已装的只会「已就位」）再找一次，
+#    可用 AGENT_MEMORY_SETUP_INSTALLER 换成 fork 或离线安装命令。装不上（离线）只告警，其余步骤照做。
+find_memory_setup() {
+    local p
+    for p in "${AGENT_MEMORY_SETUP:-}" \
+             "$HOME/.agents/skills/agent-memory-setup/setup.sh" \
+             "$HOME/.claude/skills/agent-memory-setup/setup.sh" \
+             "$HOME/.codex/skills/agent-memory-setup/setup.sh"; do
+        if [ -n "$p" ] && [ -f "$p" ]; then
+            echo "$p"
+            return 0
+        fi
+    done
+    return 1
+}
+SETUP_RAW="https://raw.githubusercontent.com/vvnocode/skills/main/skills/agent-memory-setup/setup.sh"
+INSTALLER=${AGENT_MEMORY_SETUP_INSTALLER:-"curl -fsSL https://raw.githubusercontent.com/vvnocode/skills/main/install.sh | bash -s -- agent-memory-setup"}
+MEMORY_SETUP=""
+if ! MEMORY_SETUP=$(find_memory_setup); then
+    echo "· 未找到 agent-memory-setup，先安装到全局 Skill 发现根（需联网）：$INSTALLER"
+    if bash -c "$INSTALLER"; then
+        MEMORY_SETUP=$(find_memory_setup) || MEMORY_SETUP=""
+    fi
+fi
+if [ -n "$MEMORY_SETUP" ]; then
+    echo "· 多工具入口与仓内记忆 → $MEMORY_SETUP"
+    bash "$MEMORY_SETUP" "$ROOT"
 else
-    echo "· .codex/config.toml 已存在"
+    echo "⚠ agent-memory-setup 未安装且无法自动安装（离线？）：CLAUDE.md 入口、Claude 记忆路径与 Codex 记忆开关本次未配置。"
+    echo "  联网后重跑本脚本；或手工执行：curl -fsSL $SETUP_RAW | bash -s -- \"$ROOT\""
 fi
 
 # 5) 项目级 Skill 兼容软链（正本在 .agents/skills）
@@ -222,11 +224,5 @@ echo "── 专项实例就绪 ──"
 echo "cd 进本目录即可使用：AGENTS.md 生效，Skill 走项目级链接路由；未改动任何全局配置。"
 echo "如需转为全局工作台：./scripts/bootstrap.sh --mode global"
 fi
-echo
-echo "── Codex 信任（用 Codex 才需要）──"
-echo "把下面这段追加到 ~/.codex/config.toml："
-echo
-echo "[projects.\"$ROOT\"]"
-echo "trust_level = \"trusted\""
 echo
 echo "自检：python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py"

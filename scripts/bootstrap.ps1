@@ -2,12 +2,13 @@
 # 状态：2026-08-27 已在真机验收——Windows 10 (17763.9121) / PowerShell 5.1 / git 2.37.3 / Python 3.10.6：
 #   干净 clone 首跑一次建齐（junction、CLAUDE.md symlink、16 个技能链接、配置文件）、幂等重跑、
 #   junction 实读、契约测试与 lint 通过、sync.sh（Git Bash）无远端路径通过、中文输出无乱码。
-#   未覆盖：无 symlink 权限账户的 CLAUDE.md 副本降级路径（代码在，遇到时按提示重跑刷新即可）。
 # 双形态改造（v0.2.0）：新增 -Mode global|project，与 bootstrap.sh 同构；该改造待 Windows 真机验收。
+# v0.3.0：CLAUDE.md 入口、本机记忆路径与 Codex 记忆开关改为委托公开 skill agent-memory-setup 的 setup.ps1（步骤 3），
+#   原 symlink/副本降级逻辑删除（引用行入库后不需要任何本地动作）；该改造待 Windows 真机验收。
 #
 # 做的事：
-#   %USERPROFILE%\.llm-wiki 发现 junction、全局 Skill junction（Claude / Codex）、
-#   CLAUDE.md 兼容入口（symlink，失败降级为副本）、本机记忆路径、项目级 Skill junction、worktree 共享钩子副本、远端指引。
+#   %USERPROFILE%\.llm-wiki 发现 junction、全局 Skill junction（三处发现根）、项目级 Skill junction、
+#   worktree 共享钩子副本、远端指引；多工具入口与仓内记忆委托 agent-memory-setup。
 # 不读取、不写入用户凭据文件。兼容 Windows PowerShell 5.1 与 PowerShell 7。
 #
 # 用法：在仓库根目录执行  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 [-Mode global|project]
@@ -84,67 +85,51 @@ if ($Mode -eq 'global') {
     Ensure-DirLink -Link $Link -Target $Root
 }
 
-# 2) CLAUDE.md 兼容入口（文件级）：优先 symlink（需开发者模式或管理员），失败降级为副本
-$agents = Join-Path $Root 'AGENTS.md'
-$claude = Join-Path $Root 'CLAUDE.md'
-$claudeItem = if (Test-Path -LiteralPath $claude) { Get-Item -LiteralPath $claude -Force } else { $null }
-if ($claudeItem -and $claudeItem.LinkType) {
-    Write-Host "- CLAUDE.md 已是链接"
-} else {
-    $needWrite = $true
-    if ($claudeItem) {
-        # 已存在普通文件：与 AGENTS.md 同内容视为最新副本，否则刷新
-        $same = (Get-FileHash -LiteralPath $claude).Hash -eq (Get-FileHash -LiteralPath $agents).Hash
-        if ($same) { Write-Host "- CLAUDE.md 副本已是最新"; $needWrite = $false }
+# 2) 目录骨架
+foreach ($d in @('.claude\skills', '.codex\skills', '.agents\skills', 'repos')) {
+    New-Item -ItemType Directory -Path (Join-Path $Root $d) -Force | Out-Null
+}
+
+# 3) 多工具入口与仓内记忆：委托公开 skill agent-memory-setup 的 setup.ps1（与 bootstrap.sh 步骤 3 同构，理由见彼处注释）。
+#    它写 CLAUDE.md 引用行 @AGENTS.md（并把 Windows 检出成文本的旧软链按普通文件重新入库）、.memory\MEMORY.md、
+#    Claude 记忆路径（settings.local.json）与 Codex 记忆开关，幂等、只补缺；验证与陷阱见该 skill 的 SKILL.md。
+#    查找顺序：$env:AGENT_MEMORY_SETUP → %USERPROFILE%\.agents\skills → .claude\skills → .codex\skills；
+#    都没有就用 skills 仓的 install.ps1 装到三处发现根（已装的只会「已就位」）再找一次，
+#    $env:AGENT_MEMORY_SETUP_INSTALLER 可换成 fork 或离线安装命令。装不上（离线）只告警，其余步骤照做。
+function Find-MemorySetup {
+    $candidates = @($env:AGENT_MEMORY_SETUP) + @(
+        (Join-Path $env:USERPROFILE '.agents\skills\agent-memory-setup\setup.ps1'),
+        (Join-Path $env:USERPROFILE '.claude\skills\agent-memory-setup\setup.ps1'),
+        (Join-Path $env:USERPROFILE '.codex\skills\agent-memory-setup\setup.ps1')
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c -PathType Leaf)) { return $c }
     }
-    if ($needWrite) {
-        try {
-            if ($claudeItem) { Remove-Item -LiteralPath $claude -Force }
-            New-Item -ItemType SymbolicLink -Path $claude -Target 'AGENTS.md' | Out-Null
-            Write-Host "- 已建立 CLAUDE.md -> AGENTS.md（symlink）"
-        } catch {
-            Copy-Item -LiteralPath $agents -Destination $claude -Force
-            Write-Host "- 已生成 CLAUDE.md 副本（本机未启用 symlink 权限；AGENTS.md 更新后请重跑 bootstrap 刷新）"
+    return $null
+}
+$SetupRaw = 'https://raw.githubusercontent.com/vvnocode/skills/main/skills/agent-memory-setup/setup.ps1'
+$memorySetup = Find-MemorySetup
+if (-not $memorySetup) {
+    Write-Host "- 未找到 agent-memory-setup，先安装到全局 Skill 发现根（需联网）"
+    try {
+        if ($env:AGENT_MEMORY_SETUP_INSTALLER) {
+            Invoke-Expression $env:AGENT_MEMORY_SETUP_INSTALLER
+        } else {
+            # 旧 Windows 的 irm 默认不带 TLS 1.2，先打开（幂等）
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
+            & ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/vvnocode/skills/main/install.ps1'))) agent-memory-setup
         }
+        $memorySetup = Find-MemorySetup
+    } catch {
+        Write-Host "! 安装 agent-memory-setup 失败：$($_.Exception.Message)"
     }
 }
-
-# 3) Claude 本机记忆路径（含绝对路径，文件不入库）
-$settingsDir = Join-Path $Root '.claude'
-$settings = Join-Path $settingsDir 'settings.local.json'
-$memDir = (Join-Path $Root '.memory') -replace '\\', '/'
-$cur = @{}
-if (Test-Path -LiteralPath $settings) {
-    try { $cur = Get-Content -LiteralPath $settings -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $cur = @{} }
-}
-if ($cur.autoMemoryDirectory -eq $memDir) {
-    Write-Host "- settings.local.json 路径已是本机"
+if ($memorySetup) {
+    Write-Host "- 多工具入口与仓内记忆 -> $memorySetup"
+    & $memorySetup $Root
 } else {
-    if ($null -eq $cur) { $cur = @{} }
-    $obj = @{}
-    if ($cur -isnot [hashtable]) { $cur.PSObject.Properties | ForEach-Object { $obj[$_.Name] = $_.Value } } else { $obj = $cur }
-    $obj['autoMemoryDirectory'] = $memDir
-    New-Item -ItemType Directory -Path $settingsDir -Force | Out-Null
-    ($obj | ConvertTo-Json -Depth 8) + "`n" | Set-Content -LiteralPath $settings -Encoding UTF8 -NoNewline
-    Write-Host "- 已写 .claude/settings.local.json（autoMemoryDirectory -> $memDir）"
-}
-
-# 4) Codex 项目级记忆配置
-$codexDir = Join-Path $Root '.codex'
-$codexToml = Join-Path $codexDir 'config.toml'
-if (-not (Test-Path -LiteralPath $codexToml)) {
-    New-Item -ItemType Directory -Path $codexDir -Force | Out-Null
-    @"
-# 记忆统一存放在仓库内 .memory/，写入规则见 AGENTS.md。
-# 生效前提：本目录须在 ~/.codex/config.toml 里被标记为 trusted。
-[memories]
-generate_memories = false
-use_memories = false
-dedicated_tools = false
-"@ | Set-Content -LiteralPath $codexToml -Encoding UTF8
-    Write-Host "- 已写 .codex/config.toml"
-} else {
-    Write-Host "- .codex/config.toml 已存在"
+    Write-Host "! agent-memory-setup 未安装且无法自动安装（离线？）：CLAUDE.md 入口、Claude 记忆路径与 Codex 记忆开关本次未配置。"
+    Write-Host "  联网后重跑本脚本；或在仓库目录内手工执行：irm $SetupRaw | iex"
 }
 
 # 5) 项目级 Skill 兼容链接（两模式）+ 6) 全局 Skill 挂载（仅全局模式追加；目录 junction，无需管理员）
@@ -223,8 +208,5 @@ Write-Host ""
 Write-Host "-- 提示 --"
 Write-Host "· sync.sh / lint 需要 Git Bash（随 Git for Windows 安装）或在 PowerShell 里直接跑 python。"
 Write-Host "· 本机 python 命令名可能是 python 而非 python3。"
-Write-Host "· 用 Codex 时把本目录标记 trusted：在 %USERPROFILE%\.codex\config.toml 加"
-Write-Host "  [projects.`"$Root`"]"
-Write-Host "  trust_level = `"trusted`""
 Write-Host ""
 Write-Host "自检：python -m unittest discover -s tests -v ; python scripts\lint-wiki.py"

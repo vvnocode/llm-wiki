@@ -2,6 +2,14 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.0 (2026-09-07)
+
+- 多工具入口与仓内记忆的接线改为委托公开 skill [agent-memory-setup](https://github.com/vvnocode/skills)：`bootstrap.sh` / `bootstrap.ps1` 不再自己写 `CLAUDE.md` 入口、`.claude/settings.local.json` 的 `autoMemoryDirectory` 与 `.codex/config.toml` 的记忆开关，改为查找已安装的 `setup.sh` / `setup.ps1`（`AGENT_MEMORY_SETUP` → `~/.agents/skills` → `~/.claude/skills` → `~/.codex/skills`）并以仓根调用；未安装时先用 skills 仓的一行安装命令装到三处发现根（装 skill 幂等，已有只报「已就位」；`AGENT_MEMORY_SETUP_INSTALLER` 可换成 fork 或离线命令），装不上只告警、其余步骤照做。理由：接线是任何仓库的通用问题，两处各维护一份脚本已经分叉（本仓软链、skill 引用行）。bootstrap 尾部的 Codex 信任提示随之删除，由 setup 脚本按实际路径打印。
+- `CLAUDE.md` 由入库的相对软链改为只含一行 `@AGENTS.md` 的普通文件：软链在 Windows 默认 `core.symlinks=false` 下检出后是只写着 `AGENTS.md` 的文本文件，Claude 读到的项目指令就是这四个字且不报错；引用行入库后任何平台、任何 worktree 检出即生效。`bootstrap.ps1` 的 symlink / 副本降级逻辑随之删除。
+- `docs/schemas/分区与共享.md` 新增「与 `.memory/` 的分工」：记忆记做事方式，wiki 记事实结论；三级写入门「项目内」展开为 `AGENTS.md` / `docs/` / `.memory/` / `wiki/projects/` 四个家与四条机械规则。`docs/workflows/记忆与多Agent.md` 缩为本仓特有部分（worktree 共享）并指向该 skill；`AGENTS.md`、`README.md`、`SETUP-FOR-AI.md`、`scripts/README.md` 同步。
+- 回归测试 `tests/test_bootstrap_memory_setup.py`：查找顺序、环境变量覆盖、缺失时安装、离线告警、幂等，以及本机装有该 skill 时的真实契约（入口、记忆路径、Codex 开关、记忆索引、gitignore）。既有两个 bootstrap 测试在伪 HOME 下放空桩避免联网。`bootstrap.ps1` 的本次改造待 Windows 真机验收。
+- 迁移：升级 merge 会把 `CLAUDE.md` 从软链换成引用行（实例若已自行改过，两边内容一致、无冲突）；merge 后在根工作区重跑 `./scripts/bootstrap.sh`（Windows `bootstrap.ps1`），首次需联网装 skill。实例侧 `.claude/settings.local.json`、`.codex/config.toml` 内容不变，setup 脚本只会报「已就位」。
+
 ## v0.2.10 (2026-09-06)
 
 - README「工具兼容性」表修正：OpenCode 的 L2 Skill 挂载此前写成「无、走 L1 文件引用」，按 opencode 1.18.18 二进制核对它同时扫 `~/.claude/skills/` 与 `~/.agents/skills/`，现有三处全局挂载已覆盖，不需要另挂 `~/.config/opencode/skills/`。仅文档，脚本与测试不变。
