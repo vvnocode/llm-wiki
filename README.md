@@ -26,7 +26,7 @@ llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现
 
 ### 方式二：手动安装
 
-前置：git、Python 3。全局形态另有一个外部前置——「全局知识工作台」路由段要进入你的全局规则（见下方「接入全局指令」，可由配套规则仓承载或手工粘贴）；专项形态无额外前置。
+前置：git、Python 3；首次 bootstrap 需联网一次，把多工具接线 skill [agent-memory-setup](https://github.com/vvnocode/skills) 装到本机全局 Skill 发现根（已装则跳过；离线时 bootstrap 只告警、其余步骤照做，联网后重跑）。全局形态另有一个外部前置——「全局知识工作台」路由段要进入你的全局规则（见下方「接入全局指令」，可由配套规则仓承载或手工粘贴）；专项形态无额外前置。
 
 **macOS / Linux**：
 
@@ -48,8 +48,8 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 
 1. （仅全局模式）发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction）→ 实例目录；
 2. （仅全局模式）全局 Skill 链接（Claude Code、Codex 各四个：ingest / query / lint / learn）；
-3. 仓内多工具入口（`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接已随仓入库，bootstrap 只补缺；Windows `core.symlinks=false` 检出的占位文本由 `bootstrap.ps1` 判为过期副本后刷新）；
-4. 仓库内记忆配置（Claude `autoMemoryDirectory`；Codex 关闭外部记忆，机制见 `docs/workflows/记忆与多Agent.md`）；
+3. 仓内多工具入口与记忆配置，委托公开 skill `agent-memory-setup` 的 setup 脚本：`CLAUDE.md` 只含一行 `@AGENTS.md` 引用（入库，任何平台检出即生效）、`.memory/MEMORY.md`、Claude `autoMemoryDirectory`、Codex 关闭外部记忆；skill 未安装时先装到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（幂等）。机制、验证与陷阱见该 skill 的 SKILL.md，本仓特有部分见 `docs/workflows/记忆与多Agent.md`；
+4. `.claude/skills/`、`.codex/skills/` 项目级兼容链接（已随仓入库，bootstrap 只补缺）；
 5. worktree 共享钩子 `.git/hooks/post-checkout`（`git worktree add` 后按 `config/worktree-share.conf` 把被 gitignore 的本机资产软链进新 worktree，见「模板升级与维护」）；
 6. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
 
@@ -66,7 +66,7 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 ```
 
-> Windows 支持已于 2026-08-27 真机验收（Windows 10 / PowerShell 5.1 / git 2.37 / Python 3.10）：干净 clone 首跑建齐全部链接、幂等重跑、junction 实读、测试与 lint、sync 无远端路径、中文输出。唯一未覆盖项为无 symlink 权限账户的 CLAUDE.md 副本降级路径（降级逻辑已实现，触发时按提示重跑刷新）。详见 `CHANGELOG.md` v0.1.0。
+> Windows 支持已于 2026-08-27 真机验收（Windows 10 / PowerShell 5.1 / git 2.37 / Python 3.10）：干净 clone 首跑建齐全部链接、幂等重跑、junction 实读、测试与 lint、sync 无远端路径、中文输出。v0.3.0 起 `CLAUDE.md` 改为引用行、接线委托 agent-memory-setup（该 skill 的 `setup.ps1` 已在 Windows 真机验证），`bootstrap.ps1` 的这次改造本身待 Windows 真机复验。详见 `CHANGELOG.md` v0.1.0 与 v0.3.0。
 
 ## 工作原理
 
@@ -120,7 +120,7 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 
 ```
 llm-wiki/
-├── AGENTS.md                  # 工作台自身指令正本（CLAUDE.md 为入库的兼容软链）
+├── AGENTS.md                  # 工作台自身指令正本（CLAUDE.md 只含一行 @AGENTS.md 引用）
 ├── SETUP-FOR-AI.md            # 面向 AI 助手的部署指引
 ├── docs/
 │   ├── schemas/               # wiki.md（wiki 契约）、分区与共享.md（三级判据）
@@ -177,7 +177,8 @@ git fetch upstream && git merge upstream/main
 - **为什么私有区用 gitignore 而不是加密或独立分支？** 需要的保证是「不出本机」，gitignore 是达成它最简单且不可能误推的机制；代价（换机不随 git 迁移）与私有区的预期体量相称。
 - **为什么不让团队共写一个 wiki 仓？** 多人实时共写带来 git 冲突与权责不清，历史上同类尝试（共建文档库）多死于此；「每人一仓 + 中心编译」让写入永远单人、合并永远由编译器做。
 - **为什么 Skill 路径全部绝对化？** 全局挂载后 Agent 的工作目录在任意项目里，相对路径必然解析失败；契约测试禁止裸相对路径回归。
-- **为什么 CLAUDE.md、`.claude/skills/` 入库，`.claude/settings.local.json` 却不入库？** 前者是相对软链，入库后任意 clone 与 worktree 都能解析（v0.2.4 前由 bootstrap 生成，worktree 里因此缺失）；Windows 未启用 `core.symlinks` 时检出为占位文本，重跑 bootstrap 刷新。后者含本机绝对路径，只能本机生成，和 `repos/`、采集游标、私有区一样按 `config/worktree-share.conf` 软链进各任务 worktree。
+- **为什么多工具接线不由 bootstrap 自己做，要依赖外部 skill？** 「一份 `AGENTS.md`、一份仓内记忆」是任何仓库都会遇到的通用问题，不是工作台特有的；两处各维护一份脚本必然分叉（v0.2.x 期间本仓的 CLAUDE.md 软链与该 skill 的引用行就是这样分开的）。bootstrap 只保留工作台特有的 worktree 共享钩子与 Skill 挂载，接线交给公开 skill [agent-memory-setup](https://github.com/vvnocode/skills)，同一脚本也用于你的其他仓库。
+- **为什么 CLAUDE.md、`.claude/skills/` 入库，`.claude/settings.local.json` 却不入库？** CLAUDE.md 是只含一行 `@AGENTS.md` 的普通文件（v0.3.0 起；此前是相对软链，Windows 未启用 `core.symlinks` 时检出为占位文本），`.claude/skills/` 是相对软链，两者入库后任意 clone 与 worktree 都能解析。后者含本机绝对路径，只能本机生成，和 `repos/`、采集游标、私有区一样按 `config/worktree-share.conf` 软链进各任务 worktree。
 
 ## 安全边界
 

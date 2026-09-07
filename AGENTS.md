@@ -19,7 +19,7 @@
 
 | 层 | 判据 |
 |---|---|
-| 项目内（该项目自己的文档） | 只对该项目成立、离开项目无意义 |
+| 项目内（该项目自己的 `AGENTS.md` / `docs/` / `.memory/`） | 只对该项目成立、离开项目无意义；记忆与 wiki 的分工见同文件「与 `.memory/` 的分工」 |
 | `wiki/projects/<项目>/` | 与单项目绑定、但跨会话仍需要 |
 | `wiki/` 公共层 | 跨项目可复用的概念、方法、决策、实体 |
 
@@ -73,7 +73,7 @@
 
 ## 多工具入口
 
-`AGENTS.md` 是唯一指令正本；`CLAUDE.md` 兼容入口与 `.claude/skills/`、`.codex/skills/` 兼容链接以相对软链入库（v0.2.4 起，保证 worktree 内可见），bootstrap 只在缺失或 Windows 无 symlink 权限时按平台补建（junction/副本）。项目级 Skill 的 canonical 位于 `.agents/skills/`；全局挂载由 bootstrap 链到 `~/.agents/skills/`、`~/.claude/skills/` 与 `~/.codex/skills/` 三处发现根（`~/.agents/skills/` 是跨工具约定俗成位，Claude 与 Codex 不扫它、各认自己的目录）。双工具共用指令与记忆的机制说明见 `docs/workflows/记忆与多Agent.md`（配置已由 bootstrap 自动完成）。
+`AGENTS.md` 是唯一指令正本；`CLAUDE.md` 是入库的普通文件，只含一行 `@AGENTS.md` 引用（v0.3.0 起取代相对软链：软链在 Windows 默认 `core.symlinks=false` 下检出后是只写着 `AGENTS.md` 的文本文件）。`.claude/skills/`、`.codex/skills/` 兼容链接以相对软链入库（v0.2.4 起，保证 worktree 内可见），bootstrap 只在缺失或 Windows 无 symlink 权限时按平台补建（junction/副本）。项目级 Skill 的 canonical 位于 `.agents/skills/`；全局挂载由 bootstrap 链到 `~/.agents/skills/`、`~/.claude/skills/` 与 `~/.codex/skills/` 三处发现根（`~/.agents/skills/` 是跨工具约定俗成位，Claude 与 Codex 不扫它、各认自己的目录）。多工具入口与仓内记忆的接线由 bootstrap 委托公开 skill `agent-memory-setup` 完成（未装先装到三处发现根），本仓只保留 worktree 共享钩子等特有部分，见 `docs/workflows/记忆与多Agent.md`。
 
 ## 语言与文风
 

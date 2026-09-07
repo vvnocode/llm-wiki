@@ -29,6 +29,11 @@ class BootstrapChmodTest(unittest.TestCase):
         base = Path(self.temp_dir.name).resolve()
         self.home = base / "home"
         self.home.mkdir()
+        # bootstrap 会调用 agent-memory-setup 的 setup.sh：伪 HOME 下放一个空桩，避免联网安装
+        stub = self.home / ".agents" / "skills" / "agent-memory-setup" / "setup.sh"
+        stub.parent.mkdir(parents=True)
+        stub.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+        stub.chmod(0o755)
         self.repo = base / "repo"
         (self.repo / "scripts" / "hooks").mkdir(parents=True)
         subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.repo, check=True)

@@ -15,7 +15,8 @@
 
 1. `git --version` 可用；
 2. Python 3 可用（macOS/Linux 通常是 `python3`，Windows 通常是 `python`）；
-3. 判断平台：macOS/Linux 走 bash 路径；Windows 走 PowerShell 路径（脚本兼容 PowerShell 5.1+，junction 无需管理员权限）。
+3. 判断平台：macOS/Linux 走 bash 路径；Windows 走 PowerShell 路径（脚本兼容 PowerShell 5.1+，junction 无需管理员权限）；
+4. 能访问 GitHub：bootstrap 会把多工具接线 skill `agent-memory-setup`（vvnocode/skills）装到本机 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（已装则跳过）。离线时 bootstrap 只告警、其余步骤照做，联网后重跑补齐。
 
 ## 第 1 步：询问用户三件事
 
@@ -41,7 +42,7 @@ cd <用户选择的目录>
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode <global|project，按第 1 步的选择>
 ```
 
-bootstrap 幂等（重复执行安全），会完成：`CLAUDE.md` 兼容入口、Claude/Codex 项目级 Skill 链接、仓库内记忆配置、worktree 共享钩子（`.git/hooks/post-checkout`）；全局形态另建发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录，及全局 Skill 链接（ingest/query/lint/learn，两形态合计 16 个链接，专项形态仅仓内 8 个）。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
+bootstrap 幂等（重复执行安全），会完成：多工具入口与仓库内记忆（委托 skill `agent-memory-setup`：`CLAUDE.md` 引用行、`.memory/`、Claude 记忆路径、Codex 记忆开关）、Claude/Codex 项目级 Skill 链接、worktree 共享钩子（`.git/hooks/post-checkout`）；全局形态另建发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录，及全局 Skill 链接（ingest/query/lint/learn，两形态合计 16 个链接，专项形态仅仓内 8 个）。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
 
 ## 第 3 步：验证
 
@@ -79,14 +80,14 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 2. 验证结果（测试与 lint 的真实输出结论）；
 3. 全局指令改了哪些文件（或用户选择了跳过 / 专项形态不适用）；
 4. 怎么开始用：全局形态在任意项目里正常提问，排障/分析/学习类任务会自动先查 wiki，收口默认写回（说「不用写」跳过）；专项形态 cd 进实例目录后同样提问即可；
-5. 如何卸载：全局形态删除 `~/.llm-wiki` 链接，`~/.agents/skills/llm-wiki-*`、`~/.claude/skills/llm-wiki-*`、`~/.codex/skills/llm-wiki-*` 三处链接，以及全局规则里的路由段；专项形态无任何全局痕迹。实例目录本身按用户意愿保留或删除。
+5. 如何卸载：全局形态删除 `~/.llm-wiki` 链接，`~/.agents/skills/llm-wiki-*`、`~/.claude/skills/llm-wiki-*`、`~/.codex/skills/llm-wiki-*` 三处链接，以及全局规则里的路由段；专项形态无任何全局痕迹。两种形态 bootstrap 都会把 skill `agent-memory-setup` 装到上述三处发现根，不再需要时一并删除其链接。实例目录本身按用户意愿保留或删除。
 
 ## 故障排查
 
 | 现象 | 处置 |
 |---|---|
 | Windows 下 `bootstrap.ps1` 被策略拦截 | 用 `powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1` 调用 |
-| Windows 下 CLAUDE.md 显示「已生成副本」 | 正常降级（该账户无 symlink 权限）；模板升级后重跑 bootstrap 刷新副本 |
+| bootstrap 报「agent-memory-setup 未安装且无法自动安装」 | 本机离线或无法访问 GitHub；联网后重跑 bootstrap，或按提示在仓库目录内手工执行该 skill 的 setup 脚本。其余步骤已完成，不必重来 |
 | `git commit` 报身份未配置 | 引导用户设置 `git config --global user.name / user.email` |
 | sync 报 rebase 冲突 | 按脚本提示人工解决后重跑；禁止 force |
 | 链接已存在且指向其他目录 | 本机已有另一全局实例；与用户确认保留哪个，不要擅自覆盖（新实例可改走专项形态并存） |
