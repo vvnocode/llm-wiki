@@ -13,7 +13,7 @@
 
 bootstrap 按 `AGENT_MEMORY_SETUP` → `~/.agents/skills` → `~/.claude/skills` → `~/.codex/skills` 找它；没装就先用 skills 仓的一行安装命令装到三处发现根（已装的只会「已就位」）再调用；装不上只告警，联网后重跑即可。四工具的机制对照、逐工具验证方法、Codex 信任门与后台记忆管线等陷阱，一律见该 skill 的 `SKILL.md`，本文不复述。
 
-记忆读写规则本仓不写仓内段（bootstrap 不传 `--with-rule`）：由跨工具全局规则（如 claude.md 规则仓「项目记忆」节）承担。给没有全局规则的协作者用时，在实例里手工跑一次 `setup.sh --with-rule`。
+记忆读写规则本仓不写仓内段（bootstrap 不传 `--with-rule`）：由跨工具全局规则（如 规则仓 vvnocode/AGENTS.md「项目记忆」节）承担。给没有全局规则的协作者用时，在实例里手工跑一次 `setup.sh --with-rule`。
 
 ## 本仓特有的部分
 

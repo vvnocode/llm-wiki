@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.1 (2026-09-08)
+
+- README 新增「三件套」节：说明本仓与规则仓 vvnocode/AGENTS.md、skills 仓的分层与互补关系，三者互相独立、安装顺序随意、缺任一个另外两个照常；两个工具仓统一托管在 `~/.vvnocode/`，本仓是数据仓、可一机多实例，不进该目录。规则仓同日由 `vvnocode/claude.md` 改名为 `vvnocode/AGENTS.md`，本仓所有引用同步。仅文档，脚本与测试不变。
+- 迁移：无动作。
+
 ## v0.3.0 (2026-09-07)
 
 - 多工具入口与仓内记忆的接线改为委托公开 skill [agent-memory-setup](https://github.com/vvnocode/skills)：`bootstrap.sh` / `bootstrap.ps1` 不再自己写 `CLAUDE.md` 入口、`.claude/settings.local.json` 的 `autoMemoryDirectory` 与 `.codex/config.toml` 的记忆开关，改为查找已安装的 `setup.sh` / `setup.ps1`（`AGENT_MEMORY_SETUP` → `~/.agents/skills` → `~/.claude/skills` → `~/.codex/skills`）并以仓根调用；未安装时先用 skills 仓的一行安装命令装到三处发现根（装 skill 幂等，已有只报「已就位」；`AGENT_MEMORY_SETUP_INSTALLER` 可换成 fork 或离线命令），装不上只告警、其余步骤照做。理由：接线是任何仓库的通用问题，两处各维护一份脚本已经分叉（本仓软链、skill 引用行）。bootstrap 尾部的 Codex 信任提示随之删除，由 setup 脚本按实际路径打印。
@@ -71,7 +76,7 @@
 - 迁移：既有全局实例 merge 后重跑 bootstrap 即可，无目录或数据变更；自动化脚本中对全新实例的 bootstrap 调用需补 `--mode` 参数。
 - Windows：bootstrap.ps1 已同构改造，真机验收待补（v0.1.0 既有功能不受影响）。
 - 路由段：bootstrap 打印的「全局知识工作台」段增补实例内就近优先条款（cwd 在某实例内时以该实例为工作台、本段路由不适用），与 skill 的 $WIKI 规则及规则仓同文对齐。
-- 杂项：`.gitignore` 增 `.worktrees/`；README / SETUP-FOR-AI / AGENTS.md / 分区与共享 改双形态叙事，并补全局形态外部前置说明（路由段接入，可由配套规则仓 [claude.md](https://github.com/vvnocode/claude.md) 承载；专项形态零外部前置，先后顺序无关）。
+- 杂项：`.gitignore` 增 `.worktrees/`；README / SETUP-FOR-AI / AGENTS.md / 分区与共享 改双形态叙事，并补全局形态外部前置说明（路由段接入，可由配套规则仓 [vvnocode/AGENTS.md](https://github.com/vvnocode/AGENTS.md) 承载；专项形态零外部前置，先后顺序无关）。
 
 ## v0.1.0 (2026-08-28)
 
