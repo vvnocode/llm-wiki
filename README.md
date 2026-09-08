@@ -4,7 +4,7 @@
 
 适用于 Claude Code、Codex、Cursor、OpenCode、Gemini CLI、DeepSeek Harness 等支持用户级规则文件的编码 Agent。思想承 [Karpathy LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)（原料与编译知识分层，ingest / query / lint 三环维护），并在其上扩展了**全局化**（跨项目、跨工具共用一份）、**多项目分区**、**私有区**与 **learning 学习模块**（第四环）。
 
-- [为什么需要它](#为什么需要它) · [快速开始](#快速开始) · [工作原理](#工作原理) · [日常使用](#日常使用) · [工具兼容性](#工具兼容性) · [目录结构](#目录结构) · [模板升级](#模板升级与维护) · [FAQ](#设计决策faq)
+- [为什么需要它](#为什么需要它) · [快速开始](#快速开始) · [工作原理](#工作原理) · [日常使用](#日常使用) · [工具兼容性](#工具兼容性) · [三件套](#三件套) · [目录结构](#目录结构) · [模板升级](#模板升级与维护) · [FAQ](#设计决策faq)
 
 ## 为什么需要它
 
@@ -55,7 +55,7 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 
 **接入全局指令**（仅全局模式；这是全局形态唯一的外部前置——让「全局知识工作台」路由段进入你的全局规则，二选一）：
 
-- **配套规则仓 [claude.md](https://github.com/vvnocode/claude.md)（推荐）**：跨工具工程纪律基线，正本已内置本工作台路由段；按其 README 把各工具用户级入口软链到规则正本即生效，无需手工粘贴。已在用它的，更新到含「全局知识工作台」一节的版本即可。
+- **配套规则仓 [vvnocode/AGENTS.md](https://github.com/vvnocode/AGENTS.md)（推荐）**：跨工具工程纪律基线，正本已内置本工作台路由段；按其 README 把各工具用户级入口软链到规则正本即生效，无需手工粘贴。已在用它的，更新到含「全局知识工作台」一节的版本即可。
 - **手工粘贴**：把 bootstrap 打印的路由段粘进各工具的用户级规则文件（`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md` 等）。
 
 路由段自带条件门（本机存在 `~/.llm-wiki` 才生效），因此规则仓与本工作台**先装后装皆可**、互不阻塞；专项模式两者都不需要。
@@ -114,7 +114,24 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 | Gemini CLI | `~/.gemini/GEMINI.md` | ✓ | —（走 L1 文件引用） |
 | Cursor | 设置中的 User Rules | ✓（粘贴路由段） | — |
 
-各工具入口位置以其官方文档为准。若你的全局规则已由跨工具规则仓（单一文件 + symlink 到上述各入口）统一管理，路由段合入一次即全部工具生效——配套参考实现：[claude.md](https://github.com/vvnocode/claude.md)（已内置路由段）。
+各工具入口位置以其官方文档为准。若你的全局规则已由跨工具规则仓（单一文件 + symlink 到上述各入口）统一管理，路由段合入一次即全部工具生效——配套参考实现：[vvnocode/AGENTS.md](https://github.com/vvnocode/AGENTS.md)（已内置路由段）。
+
+## 三件套
+
+本仓是 vvnocode 三件套之一。三者各管一层、互相独立、安装顺序随意，缺任何一个另外两个照常工作：
+
+| 仓库 | 管什么 | 装到哪 | 缺了会怎样 |
+|---|---|---|---|
+| [vvnocode/AGENTS.md](https://github.com/vvnocode/AGENTS.md) | 跨工具全局规则，含「项目记忆」读写规则与本工作台的路由段 | `~/.vvnocode/rules`，软链到各工具的用户级规则入口 | 路由段手工粘贴（bootstrap 会打印）；记忆读写规则由 `setup.sh --with-rule` 写进仓内 |
+| [skills](https://github.com/vvnocode/skills) | 可公开分发的 skill，含给任意仓库接线的 `agent-memory-setup` | `~/.vvnocode/skills`，软链到三处全局 Skill 发现根 | bootstrap 会自动补装；装不上只告警，联网后重跑 |
+| [llm-wiki](https://github.com/vvnocode/llm-wiki)（本仓） | 个人知识工作台：跨项目的机制、决策、案例 | 目录自选，`~/.llm-wiki` 软链指过去。它是数据仓、可一机多实例，不进 `~/.vvnocode` | 规则里的「全局知识工作台」整段失效，另外两层照常 |
+
+运行时只有两处条件门把三者接起来：仓内有 `.memory/` 才读写记忆，本机有 `~/.llm-wiki` 才查写 wiki。装另外两个各一行命令：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vvnocode/AGENTS.md/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vvnocode/skills/main/install.sh | bash
+```
 
 ## 目录结构
 
