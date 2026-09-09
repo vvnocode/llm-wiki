@@ -1,0 +1,5 @@
+# llm-wiki 实例特有的本机资产；通用项由 agent-memory-setup 内置清单负责。
+repos
+state/collectors
+wiki/private
+.release-check-local

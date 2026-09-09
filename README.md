@@ -4,7 +4,7 @@
 
 适用于 Claude Code、Codex、Cursor、OpenCode、Gemini CLI、DeepSeek Harness 等支持用户级规则文件的编码 Agent。思想承 [Karpathy LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)（原料与编译知识分层，ingest / query / lint 三环维护），并在其上扩展了**全局化**（跨项目、跨工具共用一份）、**多项目分区**、**私有区**与 **learning 学习模块**（第四环）。
 
-- [为什么需要它](#为什么需要它) · [快速开始](#快速开始) · [工作原理](#工作原理) · [日常使用](#日常使用) · [工具兼容性](#工具兼容性) · [三件套](#三件套) · [目录结构](#目录结构) · [模板升级](#模板升级与维护) · [FAQ](#设计决策faq)
+- [为什么需要它](#为什么需要它) · [快速开始](#快速开始) · [工作原理](#工作原理) · [日常使用](#日常使用) · [工具兼容性](#工具兼容性) · [两件套](#两件套) · [目录结构](#目录结构) · [模板升级](#模板升级与维护) · [FAQ](#设计决策faq)
 
 ## 为什么需要它
 
@@ -26,7 +26,7 @@ llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现
 
 ### 方式二：手动安装
 
-前置：git、Python 3；首次 bootstrap 需联网一次，把多工具接线 skill [agent-memory-setup](https://github.com/vvnocode/skills) 装到本机全局 Skill 发现根（已装则跳过；离线时 bootstrap 只告警、其余步骤照做，联网后重跑）。全局形态另有一个外部前置——「全局知识工作台」路由段要进入你的全局规则（见下方「接入全局指令」，可由配套规则仓承载或手工粘贴）；专项形态无额外前置。
+前置：git、Python 3；首次 bootstrap 需联网一次，把多工具接线 skill [agent-memory-setup](https://github.com/vvnocode/AGENTS.md/tree/main/skills/agent-memory-setup) 装到本机全局 Skill 发现根（已装则跳过；离线时 bootstrap 只告警、其余步骤照做，联网后重跑）。全局形态另有一个外部前置——「全局知识工作台」路由段要进入你的全局规则（见下方「接入全局指令」，可由配套规则仓承载或手工粘贴）；专项形态无额外前置。
 
 **macOS / Linux**：
 
@@ -46,11 +46,11 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode global    #
 
 bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；全程不读写凭据文件），完成：
 
-1. （仅全局模式）发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction）→ 实例目录；
+1. （仅全局模式）发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction；删除只用 `rmdir`，`Remove-Item -Recurse` 会穿过联接删掉实例目录里的文件）→ 实例目录；
 2. （仅全局模式）全局 Skill 链接（Claude Code、Codex 各四个：ingest / query / lint / learn）；
 3. 仓内多工具入口与记忆配置，委托公开 skill `agent-memory-setup` 的 setup 脚本：`CLAUDE.md` 只含一行 `@AGENTS.md` 引用（入库，任何平台检出即生效）、`.memory/MEMORY.md`、Claude `autoMemoryDirectory`、Codex 关闭外部记忆；skill 未安装时先装到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（幂等）。机制、验证与陷阱见该 skill 的 SKILL.md，本仓特有部分见 `docs/workflows/记忆与多Agent.md`；
 4. `.claude/skills/`、`.codex/skills/` 项目级兼容链接（已随仓入库，bootstrap 只补缺）；
-5. worktree 共享钩子 `.git/hooks/post-checkout`（`git worktree add` 后按 `config/worktree-share.conf` 把被 gitignore 的本机资产软链进新 worktree，见「模板升级与维护」）；
+5. 通用 worktree 共享钩子由 `agent-memory-setup` 安装（`git worktree add` 后按内置清单和本仓根目录 `.worktree-share` 共享被 gitignore 的本机资产）；
 6. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
 
 **接入全局指令**（仅全局模式；这是全局形态唯一的外部前置——让「全局知识工作台」路由段进入你的全局规则，二选一）：
@@ -116,21 +116,19 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 
 各工具入口位置以其官方文档为准。若你的全局规则已由跨工具规则仓（单一文件 + symlink 到上述各入口）统一管理，路由段合入一次即全部工具生效——配套参考实现：[vvnocode/AGENTS.md](https://github.com/vvnocode/AGENTS.md)（已内置路由段）。
 
-## 三件套
+## 两件套
 
-本仓是 vvnocode 三件套之一。三者各管一层、互相独立、安装顺序随意，缺任何一个另外两个照常工作：
+本仓是 vvnocode 两件套之一。两者各管一层、互相独立、安装顺序随意，缺任何一个另一个照常工作：
 
 | 仓库 | 管什么 | 装到哪 | 缺了会怎样 |
 |---|---|---|---|
-| [vvnocode/AGENTS.md](https://github.com/vvnocode/AGENTS.md) | 跨工具全局规则，含「项目记忆」读写规则与本工作台的路由段 | `~/.vvnocode/rules`，软链到各工具的用户级规则入口 | 路由段手工粘贴（bootstrap 会打印）；记忆读写规则由 `setup.sh --with-rule` 写进仓内 |
-| [skills](https://github.com/vvnocode/skills) | 可公开分发的 skill，含给任意仓库接线的 `agent-memory-setup` | `~/.vvnocode/skills`，软链到三处全局 Skill 发现根 | bootstrap 会自动补装；装不上只告警，联网后重跑 |
-| [llm-wiki](https://github.com/vvnocode/llm-wiki)（本仓） | 个人知识工作台：跨项目的机制、决策、案例 | 目录自选，`~/.llm-wiki` 软链指过去。它是数据仓、可一机多实例，不进 `~/.vvnocode` | 规则里的「全局知识工作台」整段失效，另外两层照常 |
+| [AGENTS.md](https://github.com/vvnocode/AGENTS.md) | 跨工具全局规则，以及给任意仓库接线的 `agent-memory-setup` | `~/.vvnocode/rules`，规则和 skill 分别链接到各工具入口 | 规则没人下发、仓库不接线时，跨工具记忆和 worktree 共享不会自动建立 |
+| [llm-wiki](https://github.com/vvnocode/llm-wiki)（本仓） | 个人知识工作台：跨项目的机制、决策、案例 | 目录自选，`~/.llm-wiki` 软链指过去 | 规则中的 Wiki 路由不生效，不影响仓内记忆机制 |
 
-运行时只有两处条件门把三者接起来：仓内有 `.memory/` 才读写记忆，本机有 `~/.llm-wiki` 才查写 wiki。装另外两个各一行命令：
+运行时只有两处条件门把两者接起来：仓内有 `.memory/` 才读写记忆，本机有 `~/.llm-wiki` 才查写 Wiki。原 `vvnocode/skills` 仓的 `agent-memory-setup` 已于 2026-09-08 并入规则仓；重跑规则仓安装命令会把旧链接重指到新位置。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/vvnocode/AGENTS.md/main/install.sh | bash
-curl -fsSL https://raw.githubusercontent.com/vvnocode/skills/main/install.sh | bash
 ```
 
 ## 目录结构
@@ -143,7 +141,7 @@ llm-wiki/
 │   ├── schemas/               # wiki.md（wiki 契约）、分区与共享.md（三级判据）
 │   └── workflows/             # 工作方式、新域落地、多 Agent 记忆
 ├── .agents/skills/            # Skill 正本：llm-wiki-{ingest,query,lint,learn}
-├── scripts/                   # bootstrap.sh、bootstrap.ps1、sync.sh、lint-wiki.py、new-domain.sh、worktree.sh
+├── scripts/                   # bootstrap.sh、bootstrap.ps1、sync.sh、lint-wiki.py、new-domain.sh
 ├── tests/                     # Skill 契约测试（单一真源、全局路径约定）
 ├── wiki/
 │   ├── index.md               # 根索引（两级索引的第一级）
@@ -153,7 +151,7 @@ llm-wiki/
 │   └── private/               # 私有区（gitignore，物理不出本机）
 ├── inputs/manual/             # 不可复得的口述与截图原料
 ├── config/registry.md         # 项目仓库、域扩展、外部文档的唯一登记处
-├── config/worktree-share.conf # 软链进任务 worktree 的本机资产清单（repos/、采集游标、私有区、settings.local.json）
+├── .worktree-share             # 本实例特有的被忽略资产共享清单
 ├── outputs/                   # 可再生成的交付物（不是 wiki）
 └── state/                     # 本机运行状态（不作证据）
 ```
@@ -177,7 +175,7 @@ git fetch upstream && git merge upstream/main
 
 发布安全：发布用 `scripts/release.sh`（自动先跑 `release-check.sh` 三类扫描：内网 IP、凭证模式、本地敏感词表，再推全部发布远端）；并安装维护者 hook `cp scripts/hooks/pre-push .git/hooks/`——它保证推往发布远端的任何 ref 都在 template 历史内（实例分支推不出去，IDE 误点也不行）并强制敏感扫描。词表 `.release-check-local` 留在本机不入库。
 
-任务 worktree：白名单外改动一律在 `.worktrees/{任务名}/` 进行（`AGENTS.md`「提交与分支约定」）。`git worktree add` 只检出入库文件，`repos/` 克隆、采集游标、私有区、`.claude/settings.local.json`（记忆目录指向）等被 gitignore 的本机资产会在新 worktree 里缺失；bootstrap 安装的 post-checkout 钩子（或显式 `scripts/worktree.sh add <任务名>`）按 `config/worktree-share.conf` 把它们软链进 worktree，`scripts/worktree.sh remove <任务名>` 收尾时先回收 worktree 内新产生的被忽略文件再删除。共享目录的 `.gitignore` 规则不带尾斜杠——尾斜杠只匹配真实目录，不匹配软链；脚本对每条软链做 check-ignore 复核，未被忽略即撤销并告警。
+任务 worktree：白名单外改动一律在 `.worktrees/{任务名}/` 进行（`AGENTS.md`「提交与分支约定」）。`git worktree add` 只检出入库文件；规则仓的 `agent-memory-setup` 安装的 post-checkout 钩子会按通用清单和本仓根目录的 `.worktree-share`，把 `repos`、采集游标、私有区等被 gitignore 的本机资产共享进新 worktree。目录使用软链，文件使用副本；`wiki/private/` 因含入库的 README 按条目展开，其下已有的私有页进 worktree 的是副本而非链接，worktree 里新写或改动的私有页不会回到根工作区——私有区按内容目录的纪律只在根工作区写；`.claude/settings.local.json` 由 Claude 原生回读，不共享。接线前已存在的 worktree 手动执行通用 skill 的 `worktree-share.sh link <路径>`。Windows 无符号链接权限时目录项会告警并跳过，不退回目录联接。
 
 ## 域扩展
 
@@ -194,8 +192,8 @@ git fetch upstream && git merge upstream/main
 - **为什么私有区用 gitignore 而不是加密或独立分支？** 需要的保证是「不出本机」，gitignore 是达成它最简单且不可能误推的机制；代价（换机不随 git 迁移）与私有区的预期体量相称。
 - **为什么不让团队共写一个 wiki 仓？** 多人实时共写带来 git 冲突与权责不清，历史上同类尝试（共建文档库）多死于此；「每人一仓 + 中心编译」让写入永远单人、合并永远由编译器做。
 - **为什么 Skill 路径全部绝对化？** 全局挂载后 Agent 的工作目录在任意项目里，相对路径必然解析失败；契约测试禁止裸相对路径回归。
-- **为什么多工具接线不由 bootstrap 自己做，要依赖外部 skill？** 「一份 `AGENTS.md`、一份仓内记忆」是任何仓库都会遇到的通用问题，不是工作台特有的；两处各维护一份脚本必然分叉（v0.2.x 期间本仓的 CLAUDE.md 软链与该 skill 的引用行就是这样分开的）。bootstrap 只保留工作台特有的 worktree 共享钩子与 Skill 挂载，接线交给公开 skill [agent-memory-setup](https://github.com/vvnocode/skills)，同一脚本也用于你的其他仓库。
-- **为什么 CLAUDE.md、`.claude/skills/` 入库，`.claude/settings.local.json` 却不入库？** CLAUDE.md 是只含一行 `@AGENTS.md` 的普通文件（v0.3.0 起；此前是相对软链，Windows 未启用 `core.symlinks` 时检出为占位文本），`.claude/skills/` 是相对软链，两者入库后任意 clone 与 worktree 都能解析。后者含本机绝对路径，只能本机生成，和 `repos/`、采集游标、私有区一样按 `config/worktree-share.conf` 软链进各任务 worktree。
+- **为什么多工具接线不由 bootstrap 自己做，要依赖外部 skill？** 「一份 `AGENTS.md`、一份仓内记忆」是任何仓库都会遇到的通用问题，不是工作台特有的；两处各维护一份脚本必然分叉。bootstrap 只保留工作台特有的发现链、Skill 挂载与 `.worktree-share` 清单，接线和通用 worktree 钩子交给规则仓中的 `agent-memory-setup`，同一脚本也用于其他仓库。
+- **为什么 CLAUDE.md、`.claude/skills/` 入库，`.claude/settings.local.json` 却不入库？** CLAUDE.md 是只含一行 `@AGENTS.md` 的普通文件（v0.3.0 起；此前是相对软链，Windows 未启用 `core.symlinks` 时检出为占位文本），`.claude/skills/` 是相对软链，两者入库后任意 clone 与 worktree 都能解析。后者含本机绝对路径，只由 Claude 原生回读主工作区，不共享。
 
 ## 安全边界
 

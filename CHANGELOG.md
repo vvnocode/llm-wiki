@@ -2,6 +2,13 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.2 (2026-09-09)
+
+- worktree 共享收敛到两件套机制：退役本仓自带的 `scripts/worktree.sh`、`scripts/hooks/post-checkout` 与 `config/worktree-share.conf`，通用 post-checkout 钩子由规则仓 skill `agent-memory-setup` 的 setup 脚本安装，本仓只保留仓根 `.worktree-share` 登记工作台特有的被忽略资产（`repos`、`state/collectors`、`wiki/private`、`.release-check-local`）。目录软链、文件副本；Windows 只用符号链接、不退回目录联接（`git worktree remove` 会穿过联接删掉根工作区的文件）。`bootstrap.sh` / `bootstrap.ps1` 删除钩子安装步骤，`tests/test_worktree_share.py` 随脚本退役（对应契约测试随 skill 走）。原 `vvnocode/skills` 仓已并入规则仓 `vvnocode/AGENTS.md`，README「三件套」改「两件套」，所有引用同步。
+- 文档修正：`.gitignore` 注释与清单位置一致；`SETUP-FOR-AI.md` 与 README 写明 bootstrap 建的发现链接与 Skill 链接在 Windows 是目录联接，卸载只能 `rmdir`，`Remove-Item -Recurse` 会穿透联接删掉实例目录内容；README 写明 `wiki/private/` 下已有私有页进 worktree 是副本、私有区只在根工作区写。
+- `.gitignore` 新增 `.claude/worktrees/`：Claude Code `--worktree` 自建的容器不再留下未跟踪噪音。
+- 迁移：升级 merge 后在根工作区重跑 `./scripts/bootstrap.sh`（Windows `bootstrap.ps1`），它会经 `agent-memory-setup` 重装 post-checkout 钩子；旧钩子若是指向 `scripts/hooks/post-checkout` 的软链会随该文件删除而失效，setup 脚本检测到非本 skill 写的钩子时只告警，此时手动删掉旧钩子再重跑。接线前已有的 worktree 手动执行一次 `worktree-share.sh link <路径>`。
+
 ## v0.3.1 (2026-09-08)
 
 - README 新增「三件套」节：说明本仓与规则仓 vvnocode/AGENTS.md、skills 仓的分层与互补关系，三者互相独立、安装顺序随意、缺任一个另外两个照常；两个工具仓统一托管在 `~/.vvnocode/`，本仓是数据仓、可一机多实例，不进该目录。规则仓同日由 `vvnocode/claude.md` 改名为 `vvnocode/AGENTS.md`，本仓所有引用同步。仅文档，脚本与测试不变。

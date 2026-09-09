@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """bootstrap.sh 委托 agent-memory-setup 接线的离线回归测试。
 
-背景：v0.3.0 起 bootstrap 不再自己写 CLAUDE.md 入口、Claude 记忆路径与 Codex 记忆开关，
-这三步改由公开 skill `agent-memory-setup` 的 `setup.sh` 完成（正本 GitHub vvnocode/skills）。
+背景：bootstrap 调用规则仓 `vvnocode/AGENTS.md` 中的 `agent-memory-setup`，完成多工具入口、仓内记忆和 worktree 钩子。
 bootstrap 只负责找到它并以仓根为参数调用：环境变量 `AGENT_MEMORY_SETUP` 显式指定 →
 `~/.agents/skills` → `~/.claude/skills` → `~/.codex/skills`；都没有时用
 `AGENT_MEMORY_SETUP_INSTALLER`（缺省为 skills 仓的一行 curl 安装命令）装好再找一次；
@@ -145,10 +144,6 @@ class BootstrapMemorySetupTest(unittest.TestCase):
         self.assertIn("⚠", proc.stdout)
         self.assertIn("agent-memory-setup", proc.stdout)
         self.assertIn("setup.sh", proc.stdout)
-        hook = Path(subprocess.run(
-            ["git", "rev-parse", "--git-path", "hooks"], cwd=self.repo, capture_output=True, text=True, check=True
-        ).stdout.strip())
-        self.assertTrue((self.repo / hook / "post-checkout").is_symlink(), "其余步骤应照常执行")
         self.assertEqual(self.calls(), [])
 
     def test_rerun_is_idempotent(self) -> None:
