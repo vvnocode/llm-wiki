@@ -2,13 +2,12 @@
 # 状态：2026-08-27 已在真机验收——Windows 10 (17763.9121) / PowerShell 5.1 / git 2.37.3 / Python 3.10.6：
 #   干净 clone 首跑一次建齐（junction、CLAUDE.md symlink、16 个技能链接、配置文件）、幂等重跑、
 #   junction 实读、契约测试与 lint 通过、sync.sh（Git Bash）无远端路径通过、中文输出无乱码。
-# 双形态改造（v0.2.0）：新增 -Mode global|project，与 bootstrap.sh 同构；该改造待 Windows 真机验收。
-# v0.3.0：CLAUDE.md 入口、本机记忆路径与 Codex 记忆开关改为委托公开 skill agent-memory-setup 的 setup.ps1（步骤 3），
-#   原 symlink/副本降级逻辑删除（引用行入库后不需要任何本地动作）；该改造待 Windows 真机验收。
+# 双形态改造（v0.2.0）：新增 -Mode global|project，与 bootstrap.sh 同构。
+# v0.3.0：CLAUDE.md 入口、本机记忆路径与 Codex 记忆开关改为委托规则仓中的公开 skill agent-memory-setup。
 #
 # 做的事：
 #   %USERPROFILE%\.llm-wiki 发现 junction、全局 Skill junction（三处发现根）、项目级 Skill junction、
-#   worktree 共享钩子副本、远端指引；多工具入口与仓内记忆委托 agent-memory-setup。
+#   特有共享清单、远端指引；通用 worktree 钩子由 agent-memory-setup 委托安装。
 # 不读取、不写入用户凭据文件。兼容 Windows PowerShell 5.1 与 PowerShell 7。
 #
 # 用法：在仓库根目录执行  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 [-Mode global|project]
@@ -107,7 +106,7 @@ function Find-MemorySetup {
     }
     return $null
 }
-$SetupRaw = 'https://raw.githubusercontent.com/vvnocode/skills/main/skills/agent-memory-setup/setup.ps1'
+$SetupRaw = 'https://raw.githubusercontent.com/vvnocode/AGENTS.md/main/skills/agent-memory-setup/setup.ps1'
 $memorySetup = Find-MemorySetup
 if (-not $memorySetup) {
     Write-Host "- 未找到 agent-memory-setup，先安装到全局 Skill 发现根（需联网）"
@@ -117,7 +116,7 @@ if (-not $memorySetup) {
         } else {
             # 旧 Windows 的 irm 默认不带 TLS 1.2，先打开（幂等）
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072
-            & ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/vvnocode/skills/main/install.ps1'))) agent-memory-setup
+            & ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/vvnocode/AGENTS.md/main/install.ps1'))) agent-memory-setup
         }
         $memorySetup = Find-MemorySetup
     } catch {
@@ -152,18 +151,7 @@ foreach ($destRoot in $destRoots) {
     }
 }
 
-# 6b) worktree 共享钩子：git worktree add 后自动把本机资产软链进新 worktree（清单 config\worktree-share.conf）。
-#     Windows 以副本安装（模板升级后重跑 bootstrap 刷新）；worktree.sh 需在 Git Bash 下运行且账户有 symlink 权限。待 Windows 真机验收。
-$hookSrc = Join-Path $Root 'scripts\hooks\post-checkout'
-$hookDir = Join-Path $Root '.git\hooks'
-$hookDst = Join-Path $hookDir 'post-checkout'
-if ((Test-Path -LiteralPath $hookDst) -and ((Get-FileHash -LiteralPath $hookDst).Hash -eq (Get-FileHash -LiteralPath $hookSrc).Hash)) {
-    Write-Host "- .git\hooks\post-checkout 已是最新"
-} else {
-    New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
-    Copy-Item -LiteralPath $hookSrc -Destination $hookDst -Force
-    Write-Host "- 已安装 .git\hooks\post-checkout（worktree 共享钩子）"
-}
+# 6b) 通用 worktree 共享钩子由 agent-memory-setup/setup.ps1 安装；本仓只提供特有共享清单。
 
 # 7) 远端与接入指引（不代做）
 # 注意：PS 5.1 在 ErrorActionPreference=Stop 下会把 native 命令的 stderr 包装成异常，

@@ -16,7 +16,7 @@
 1. `git --version` 可用；
 2. Python 3 可用（macOS/Linux 通常是 `python3`，Windows 通常是 `python`）；
 3. 判断平台：macOS/Linux 走 bash 路径；Windows 走 PowerShell 路径（脚本兼容 PowerShell 5.1+，junction 无需管理员权限）；
-4. 能访问 GitHub：bootstrap 会把多工具接线 skill `agent-memory-setup`（vvnocode/skills）装到本机 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（已装则跳过）。离线时 bootstrap 只告警、其余步骤照做，联网后重跑补齐。
+4. 能访问 GitHub：bootstrap 会把多工具接线 skill `agent-memory-setup`（规则仓 `vvnocode/AGENTS.md`）装到本机 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（已装则跳过）。离线时 bootstrap 只告警、其余步骤照做，联网后重跑补齐。
 
 ## 第 1 步：询问用户三件事
 

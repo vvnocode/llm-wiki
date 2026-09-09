@@ -5,15 +5,14 @@
 #           worktree 共享钩子、脚本权限、远端指引），不改动任何全局配置
 # 缺省 --mode 时按发现链探测；全新实例交互询问，非交互环境必须显式传参。
 # 多工具入口（CLAUDE.md 引用行）与仓内记忆（.memory/、Claude 记忆路径、Codex 记忆开关）不由本脚本自己写，
-# 委托公开 skill agent-memory-setup 的 setup.sh（步骤 3）；未安装时先装到全局 Skill 发现根，装 skill 本身幂等。
+# 委托合并进规则仓的公开 skill agent-memory-setup 的 setup.sh（步骤 3）；未安装时先装到全局 Skill 发现根，装 skill 本身幂等。
 # 不读取、不写入用户主目录里的凭据文件。
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
-# 只在根工作区运行：附属 worktree 里 .claude/settings.local.json 是指向根工作区的软链（见 config/worktree-share.conf），
-# 在这里改写会把根工作区的记忆路径指到 worktree；全局发现链也会指错。
+# 只在根工作区运行：附属 worktree 里的本机设置由 agent-memory-setup 按主工作区规则处理，不能在此改写。
 if [ "$(cd "$(git rev-parse --git-dir)" && pwd -P)" != "$(cd "$(git rev-parse --git-common-dir)" && pwd -P)" ]; then
     echo "✗ 当前是附属 worktree（$ROOT），请在根工作区运行 bootstrap：$(git worktree list --porcelain | head -1 | sed 's/^worktree //')" >&2
     exit 1
@@ -93,7 +92,7 @@ fi
 mkdir -p .claude/skills .codex/skills .agents/skills repos
 : > repos/.gitkeep 2>/dev/null || true
 
-# 3) 多工具入口与仓内记忆：委托公开 skill agent-memory-setup（正本 GitHub vvnocode/skills）。
+# 3) 多工具入口与仓内记忆：委托规则仓中的 agent-memory-setup（正本 GitHub vvnocode/AGENTS.md）。
 #    它做四件事，全部幂等、只补缺：CLAUDE.md 只含一行 @AGENTS.md 引用（v0.3.0 起取代入库软链——软链在 Windows
 #    默认 core.symlinks=false 下检出后是只写着 "AGENTS.md" 的文本文件，旧软链由它自动迁移）；.memory/MEMORY.md；
 #    Claude 的 autoMemoryDirectory 指向仓内 .memory（写在不入库的 settings.local.json）；Codex 自带记忆三项全关。
@@ -115,8 +114,8 @@ find_memory_setup() {
     done
     return 1
 }
-SETUP_RAW="https://raw.githubusercontent.com/vvnocode/skills/main/skills/agent-memory-setup/setup.sh"
-INSTALLER=${AGENT_MEMORY_SETUP_INSTALLER:-"curl -fsSL https://raw.githubusercontent.com/vvnocode/skills/main/install.sh | bash -s -- agent-memory-setup"}
+SETUP_RAW="https://raw.githubusercontent.com/vvnocode/AGENTS.md/main/skills/agent-memory-setup/setup.sh"
+INSTALLER=${AGENT_MEMORY_SETUP_INSTALLER:-"curl -fsSL https://raw.githubusercontent.com/vvnocode/AGENTS.md/main/install.sh | bash"}
 MEMORY_SETUP=""
 if ! MEMORY_SETUP=$(find_memory_setup); then
     echo "· 未找到 agent-memory-setup，先安装到全局 Skill 发现根（需联网）：$INSTALLER"
@@ -150,21 +149,7 @@ for skill in llm-wiki-ingest llm-wiki-query llm-wiki-lint llm-wiki-learn; do
     link_skill_local "$skill"
 done
 
-# 6) worktree 共享钩子：git worktree add 后自动把根工作区的本机资产（repos/、采集游标、私有区、
-#    settings.local.json）软链进新 worktree，清单见 config/worktree-share.conf。
-#    钩子以软链安装，模板升级后自动生效；core.hooksPath 被占用时只提示不代做。
-if [ -n "$(git config --get core.hooksPath || true)" ]; then
-    echo "⚠ 本仓 core.hooksPath 已设置，.git/hooks 不生效：请自行把 scripts/hooks/post-checkout 接入该钩子目录"
-else
-    HOOKS_DIR=$(git rev-parse --git-path hooks)
-    mkdir -p "$HOOKS_DIR"
-    if [ "$HOOKS_DIR" = ".git/hooks" ]; then
-        ensure_link "$HOOKS_DIR/post-checkout" "../../scripts/hooks/post-checkout"
-    else
-        ensure_link "$HOOKS_DIR/post-checkout" "$ROOT/scripts/hooks/post-checkout"   # .git 不在仓根（本仓自身是别人的 worktree）时用绝对路径
-    fi
-fi
-
+# 6) 通用 worktree 共享钩子由 agent-memory-setup/setup.sh 安装；本仓只提供特有共享清单。
 # 7) 全局 Skill 挂载（仅全局模式）：任意项目的会话都能路由到这四个 skill。
 #    canonical 仍是本仓 .agents/skills。三个发现根缺一不可：~/.agents/skills 是跨工具的
 #    约定俗成位（dsh、Cline、Dexto、Kimi、Loaf、Warp、Zed 等直接读它），而 Claude 与 Codex
