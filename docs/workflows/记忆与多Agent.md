@@ -9,7 +9,7 @@
 1. `AGENTS.md` 唯一正本，`CLAUDE.md` 只含一行 `@AGENTS.md` 引用并入库。Claude Code 只读 `CLAUDE.md`；引用行取代软链，因为入库软链在 Windows 默认 `core.symlinks=false` 下检出后是只写着 `AGENTS.md` 的文本文件，且不报错。
 2. `.memory/MEMORY.md`。
 3. Claude 的 `autoMemoryDirectory` 指向仓内 `.memory/`（绝对路径，写在不入库的 `.claude/settings.local.json`）。
-4. Codex 自带记忆三项全关（其记忆目录不可改），改由指令约束它写 `.memory/`。
+4. Codex 自带记忆照常开启（其记忆目录不可改），属于本仓的部分由该 skill 的 `memory-sync` 按 cwd 转写为 `.memory/codex-*.md`（与 Claude 自动记忆同形，`metadata.source: codex`），由规则仓 `install.sh` 写入的全局 `SessionStart` 钩子在会话开始触发；Codex 自己新写的跨会话记忆则由指令约束进 `.memory/`。v0.3.3 前是三项全关，旧关闭块由 setup 脚本按结构识别迁移。
 
 bootstrap 按 `AGENT_MEMORY_SETUP` → `~/.agents/skills` → `~/.claude/skills` → `~/.codex/skills` 找它；没装就先用规则仓的一行安装命令装到三处发现根（已装的只会「已就位」）再调用；装不上只告警，联网后重跑即可。
 

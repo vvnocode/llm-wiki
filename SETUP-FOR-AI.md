@@ -42,7 +42,7 @@ cd <用户选择的目录>
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode <global|project，按第 1 步的选择>
 ```
 
-bootstrap 幂等（重复执行安全），会完成：多工具入口与仓库内记忆（委托 skill `agent-memory-setup`：`CLAUDE.md` 引用行、`.memory/`、Claude 记忆路径、Codex 记忆开关）、Claude/Codex 项目级 Skill 链接、worktree 共享钩子（`.git/hooks/post-checkout`）；全局形态另建发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录，及全局 Skill 链接（ingest/query/lint/learn，两形态合计 16 个链接，专项形态仅仓内 8 个）。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
+bootstrap 幂等（重复执行安全），会完成：多工具入口与仓库内记忆（委托 skill `agent-memory-setup`：`CLAUDE.md` 引用行、`.memory/`、Claude 记忆路径、Codex 记忆同步配置）、Claude/Codex 项目级 Skill 链接、worktree 共享钩子（`.git/hooks/post-checkout`）；全局形态另建发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录，及全局 Skill 链接（ingest/query/lint/learn，两形态合计 16 个链接，专项形态仅仓内 8 个）。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
 
 ## 第 3 步：验证
 

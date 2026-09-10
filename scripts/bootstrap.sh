@@ -4,7 +4,7 @@
 #   project 专项工作台：仅仓内配置（多工具入口与仓内记忆、项目级 Skill 软链、
 #           worktree 共享钩子、脚本权限、远端指引），不改动任何全局配置
 # 缺省 --mode 时按发现链探测；全新实例交互询问，非交互环境必须显式传参。
-# 多工具入口（CLAUDE.md 引用行）与仓内记忆（.memory/、Claude 记忆路径、Codex 记忆开关）不由本脚本自己写，
+# 多工具入口（CLAUDE.md 引用行）与仓内记忆（.memory/、Claude 记忆路径、Codex 记忆配置）不由本脚本自己写，
 # 委托合并进规则仓的公开 skill agent-memory-setup 的 setup.sh（步骤 3）；未安装时先装到全局 Skill 发现根，装 skill 本身幂等。
 # 不读取、不写入用户主目录里的凭据文件。
 set -euo pipefail
@@ -95,7 +95,8 @@ mkdir -p .claude/skills .codex/skills .agents/skills repos
 # 3) 多工具入口与仓内记忆：委托规则仓中的 agent-memory-setup（正本 GitHub vvnocode/AGENTS.md）。
 #    它做四件事，全部幂等、只补缺：CLAUDE.md 只含一行 @AGENTS.md 引用（v0.3.0 起取代入库软链——软链在 Windows
 #    默认 core.symlinks=false 下检出后是只写着 "AGENTS.md" 的文本文件，旧软链由它自动迁移）；.memory/MEMORY.md；
-#    Claude 的 autoMemoryDirectory 指向仓内 .memory（写在不入库的 settings.local.json）；Codex 自带记忆三项全关。
+#    Claude 的 autoMemoryDirectory 指向仓内 .memory（写在不入库的 settings.local.json）；Codex 自带记忆照常开启，
+#    属于本仓的部分由该 skill 的 memory-sync 按 cwd 同步为 .memory/codex-*.md（v0.3.3 起；此前是三项全关，旧关闭块由 setup 迁移）。
 #    机制对照、逐工具验证方法与陷阱见该 skill 的 SKILL.md，本仓不再复述。
 #    不传 --with-rule：记忆读写规则由跨工具全局规则承担（本仓 AGENTS.md 已提及 .memory/，传了也会被跳过）。
 #    查找顺序：AGENT_MEMORY_SETUP 显式路径 → ~/.agents/skills → ~/.claude/skills → ~/.codex/skills；
@@ -127,7 +128,7 @@ if [ -n "$MEMORY_SETUP" ]; then
     echo "· 多工具入口与仓内记忆 → $MEMORY_SETUP"
     bash "$MEMORY_SETUP" "$ROOT"
 else
-    echo "⚠ agent-memory-setup 未安装且无法自动安装（离线？）：CLAUDE.md 入口、Claude 记忆路径与 Codex 记忆开关本次未配置。"
+    echo "⚠ agent-memory-setup 未安装且无法自动安装（离线？）：CLAUDE.md 入口、Claude 记忆路径与 Codex 记忆配置本次未配置。"
     echo "  联网后重跑本脚本；或手工执行：curl -fsSL $SETUP_RAW | bash -s -- \"$ROOT\""
 fi
 
