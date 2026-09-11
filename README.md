@@ -48,7 +48,7 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 
 1. （仅全局模式）发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` 目录 junction；删除只用 `rmdir`，`Remove-Item -Recurse` 会穿过联接删掉实例目录里的文件）→ 实例目录；
 2. （仅全局模式）全局 Skill 链接（Claude Code、Codex 各四个：ingest / query / lint / learn）；
-3. 仓内多工具入口与记忆配置，委托公开 skill `agent-memory-setup` 的 setup 脚本：`CLAUDE.md` 只含一行 `@AGENTS.md` 引用（入库，任何平台检出即生效）、`.memory/MEMORY.md`、Claude `autoMemoryDirectory`、Codex 关闭外部记忆；skill 未安装时先装到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（幂等）。机制、验证与陷阱见该 skill 的 SKILL.md，本仓特有部分见 `docs/workflows/记忆与多Agent.md`；
+3. 仓内多工具入口与记忆配置，委托公开 skill `agent-memory-setup` 的 setup 脚本：`CLAUDE.md` 只含一行 `@AGENTS.md` 引用（入库，任何平台检出即生效）、`.memory/MEMORY.md`、Claude `autoMemoryDirectory`、Codex 记忆照常开启并由 `memory-sync` 同步回 `.memory/`；skill 未安装时先装到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（幂等）。机制、验证与陷阱见该 skill 的 SKILL.md，本仓特有部分见 `docs/workflows/记忆与多Agent.md`；
 4. `.claude/skills/`、`.codex/skills/` 项目级兼容链接（已随仓入库，bootstrap 只补缺）；
 5. 通用 worktree 共享钩子由 `agent-memory-setup` 安装（`git worktree add` 后按内置清单和本仓根目录 `.worktree-share` 共享被 gitignore 的本机资产）；
 6. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。

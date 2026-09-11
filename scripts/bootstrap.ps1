@@ -3,7 +3,7 @@
 #   干净 clone 首跑一次建齐（junction、CLAUDE.md symlink、16 个技能链接、配置文件）、幂等重跑、
 #   junction 实读、契约测试与 lint 通过、sync.sh（Git Bash）无远端路径通过、中文输出无乱码。
 # 双形态改造（v0.2.0）：新增 -Mode global|project，与 bootstrap.sh 同构。
-# v0.3.0：CLAUDE.md 入口、本机记忆路径与 Codex 记忆开关改为委托规则仓中的公开 skill agent-memory-setup。
+# v0.3.0：CLAUDE.md 入口、本机记忆路径与 Codex 记忆配置改为委托规则仓中的公开 skill agent-memory-setup。
 #
 # 做的事：
 #   %USERPROFILE%\.llm-wiki 发现 junction、全局 Skill junction（三处发现根）、项目级 Skill junction、
@@ -91,7 +91,7 @@ foreach ($d in @('.claude\skills', '.codex\skills', '.agents\skills', 'repos')) 
 
 # 3) 多工具入口与仓内记忆：委托公开 skill agent-memory-setup 的 setup.ps1（与 bootstrap.sh 步骤 3 同构，理由见彼处注释）。
 #    它写 CLAUDE.md 引用行 @AGENTS.md（并把 Windows 检出成文本的旧软链按普通文件重新入库）、.memory\MEMORY.md、
-#    Claude 记忆路径（settings.local.json）与 Codex 记忆开关，幂等、只补缺；验证与陷阱见该 skill 的 SKILL.md。
+#    Claude 记忆路径（settings.local.json）与 Codex 记忆配置（v0.3.3 起照常开启、由 memory-sync 同步回 .memory），幂等、只补缺；验证与陷阱见该 skill 的 SKILL.md。
 #    查找顺序：$env:AGENT_MEMORY_SETUP → %USERPROFILE%\.agents\skills → .claude\skills → .codex\skills；
 #    都没有就用 skills 仓的 install.ps1 装到三处发现根（已装的只会「已就位」）再找一次，
 #    $env:AGENT_MEMORY_SETUP_INSTALLER 可换成 fork 或离线安装命令。装不上（离线）只告警，其余步骤照做。
@@ -127,7 +127,7 @@ if ($memorySetup) {
     Write-Host "- 多工具入口与仓内记忆 -> $memorySetup"
     & $memorySetup $Root
 } else {
-    Write-Host "! agent-memory-setup 未安装且无法自动安装（离线？）：CLAUDE.md 入口、Claude 记忆路径与 Codex 记忆开关本次未配置。"
+    Write-Host "! agent-memory-setup 未安装且无法自动安装（离线？）：CLAUDE.md 入口、Claude 记忆路径与 Codex 记忆配置本次未配置。"
     Write-Host "  联网后重跑本脚本；或在仓库目录内手工执行：irm $SetupRaw | iex"
 }
 

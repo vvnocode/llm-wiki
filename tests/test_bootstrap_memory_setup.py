@@ -86,7 +86,7 @@ class BootstrapMemorySetupTest(unittest.TestCase):
         """bootstrap 自己不再写这三样：CLAUDE.md、settings.local.json、.codex/config.toml。"""
         self.assertFalse((self.repo / "CLAUDE.md").exists(), "bootstrap 不应再自己建 CLAUDE.md")
         self.assertFalse((self.repo / ".claude" / "settings.local.json").exists(), "记忆路径应由 setup.sh 写")
-        self.assertFalse((self.repo / ".codex" / "config.toml").exists(), "Codex 记忆开关应由 setup.sh 写")
+        self.assertFalse((self.repo / ".codex" / "config.toml").exists(), "Codex 记忆配置应由 setup.sh 写")
 
     def test_uses_skill_under_agents_root(self) -> None:
         """~/.agents/skills 下装好的 setup.sh 被以仓根为参数调用。"""
@@ -155,14 +155,16 @@ class BootstrapMemorySetupTest(unittest.TestCase):
 
     @unittest.skipUnless(REAL_SETUP.is_file(), "本机未安装 agent-memory-setup，跳过真实契约测试")
     def test_real_setup_script_contract(self) -> None:
-        """用本机真实 setup.sh 跑一遍：入口、记忆路径、Codex 开关、记忆索引四样到位。"""
+        """用本机真实 setup.sh 跑一遍：入口、记忆路径、Codex 配置、记忆索引四样到位。"""
         proc = self.run_bootstrap(AGENT_MEMORY_SETUP=str(REAL_SETUP))
         self.assertEqual((self.repo / "CLAUDE.md").read_text(encoding="utf-8"), "@AGENTS.md\n", proc.stdout)
         settings = json.loads((self.repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
         self.assertEqual(settings["autoMemoryDirectory"], f"{self.repo}/.memory")
+        # v0.3.3 起 Codex 记忆不再关闭：setup 只写一个说明「由 memory-sync 同步」的注释文件，三项关闭键不得出现
         toml = (self.repo / ".codex" / "config.toml").read_text(encoding="utf-8")
+        self.assertIn("memory-sync", toml)
         for key in ("generate_memories", "use_memories", "dedicated_tools"):
-            self.assertRegex(toml, rf"(?m)^{key} *= *false")
+            self.assertNotRegex(toml, rf"(?m)^{key} *= *false")
         self.assertTrue((self.repo / ".memory" / "MEMORY.md").is_file())
         self.assertIn(".claude/settings.local.json", (self.repo / ".gitignore").read_text(encoding="utf-8"))
 

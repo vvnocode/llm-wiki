@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.3 (2026-09-10)
+
+- Codex 自带记忆不再关闭：随规则仓 skill `agent-memory-setup` 2026-09-10 的改动，setup 脚本不再写 `[memories]` 三项关闭块，改为按结构识别并迁移旧关闭块；Codex 记忆照常开启，属于本仓的部分由 `memory-sync` 按 cwd 转写为 `.memory/codex-*.md`（与 Claude 自动记忆同形），由规则仓 `install.sh` / `install.ps1` 写入的全局 `SessionStart` 钩子触发。模板 `.codex/config.toml` 改为仅含说明注释；`bootstrap.sh` / `bootstrap.ps1` 注释与提示、README、`SETUP-FOR-AI.md`、`docs/workflows/记忆与多Agent.md` 措辞同步；`tests/test_bootstrap_memory_setup.py` 的真实契约用例改为断言三项关闭键不再出现。
+- 迁移：升级 merge 后在根工作区重跑 `./scripts/bootstrap.sh`（Windows `bootstrap.ps1`），setup 脚本会删掉旧关闭块并写新注释文件（实例自己改过 `[memories]` 的只告警不动）；再重跑一次规则仓的安装（`curl -fsSL https://raw.githubusercontent.com/vvnocode/AGENTS.md/main/install.sh | bash`）装上全局钩子。`.codex/config.toml` 若在 merge 时冲突，取模板版本（与 setup 迁移后的内容一致）。
+
 ## v0.3.2 (2026-09-09)
 
 - worktree 共享收敛到两件套机制：退役本仓自带的 `scripts/worktree.sh`、`scripts/hooks/post-checkout` 与 `config/worktree-share.conf`，通用 post-checkout 钩子由规则仓 skill `agent-memory-setup` 的 setup 脚本安装，本仓只保留仓根 `.worktree-share` 登记工作台特有的被忽略资产（`repos`、`state/collectors`、`wiki/private`、`.release-check-local`）。目录软链、文件副本；Windows 只用符号链接、不退回目录联接（`git worktree remove` 会穿过联接删掉根工作区的文件）。`bootstrap.sh` / `bootstrap.ps1` 删除钩子安装步骤，`tests/test_worktree_share.py` 随脚本退役（对应契约测试随 skill 走）。原 `vvnocode/skills` 仓已并入规则仓 `vvnocode/AGENTS.md`，README「三件套」改「两件套」，所有引用同步。
