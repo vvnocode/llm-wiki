@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.4 (2026-09-15)
+
+- 补写删除任务 worktree 前的回收：`worktree-share.sh link` 只按根工作区当时已有的被忽略条目共享一次，之后在 worktree 里新建的被忽略条目（新 clone 进 `repos/` 的仓库、实例追加的采集目录下的新周期数据等）是 worktree 自己的真实文件，对副本的改动也不回根工作区；`git worktree remove` 不检查被忽略文件，不加 `--force` 也会一并删除（git 2.50.1 实测）。实例曾因此出现采集游标经软链推进到根工作区、新周期正文随 worktree 删除。v0.2.5 的 `worktree.sh remove` 会先回收再删除，v0.3.2 退役后这一步没有替代。`docs/workflows/记忆与多Agent.md`「本仓特有的部分」新增「删 worktree 前先回收」：列出命令用 `git status --porcelain -z`（不带 `-z` 时含空格或引号的路径会被加引号，回收时找不到文件），逐条 `rsync --ignore-existing` 回收，改过的副本手工合并，采集类任务优先在根工作区跑；README「任务 worktree」一段补一句并指向该节。仅文档，脚本与测试不变。
+- 迁移：无动作。已有的任务 worktree 删除前按该节列出并回收。
+
 ## v0.3.3 (2026-09-10)
 
 - Codex 自带记忆不再关闭：随规则仓 skill `agent-memory-setup` 2026-09-10 的改动，setup 脚本不再写 `[memories]` 三项关闭块，改为按结构识别并迁移旧关闭块；Codex 记忆照常开启，属于本仓的部分由 `memory-sync` 按 cwd 转写为 `.memory/codex-*.md`（与 Claude 自动记忆同形），由规则仓 `install.sh` / `install.ps1` 写入的全局 `SessionStart` 钩子触发。模板 `.codex/config.toml` 改为仅含说明注释；`bootstrap.sh` / `bootstrap.ps1` 注释与提示、README、`SETUP-FOR-AI.md`、`docs/workflows/记忆与多Agent.md` 措辞同步；`tests/test_bootstrap_memory_setup.py` 的真实契约用例改为断言三项关闭键不再出现。
