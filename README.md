@@ -175,7 +175,7 @@ git fetch upstream && git merge upstream/main
 
 发布安全：发布用 `scripts/release.sh`（自动先跑 `release-check.sh` 三类扫描：内网 IP、凭证模式、本地敏感词表，再推全部发布远端）；并安装维护者 hook `cp scripts/hooks/pre-push .git/hooks/`——它保证推往发布远端的任何 ref 都在 template 历史内（实例分支推不出去，IDE 误点也不行）并强制敏感扫描。词表 `.release-check-local` 留在本机不入库。
 
-任务 worktree：白名单外改动一律在 `.worktrees/{任务名}/` 进行（`AGENTS.md`「提交与分支约定」）。`git worktree add` 只检出入库文件；规则仓的 `agent-memory-setup` 安装的 post-checkout 钩子会按通用清单和本仓根目录的 `.worktree-share`，把 `repos`、采集游标、私有区等被 gitignore 的本机资产共享进新 worktree。目录使用软链，文件使用副本；`wiki/private/` 因含入库的 README 按条目展开，其下已有的私有页进 worktree 的是副本而非链接，worktree 里新写或改动的私有页不会回到根工作区——私有区按内容目录的纪律只在根工作区写；`.claude/settings.local.json` 由 Claude 原生回读，不共享。接线前已存在的 worktree 手动执行通用 skill 的 `worktree-share.sh link <路径>`。Windows 无符号链接权限时目录项会告警并跳过，不退回目录联接。
+任务 worktree：白名单外改动一律在 `.worktrees/{任务名}/` 进行（`AGENTS.md`「提交与分支约定」）。`git worktree add` 只检出入库文件；规则仓的 `agent-memory-setup` 安装的 post-checkout 钩子会按通用清单和本仓根目录的 `.worktree-share`，把 `repos`、采集游标、私有区等被 gitignore 的本机资产共享进新 worktree。目录使用软链，文件使用副本；`wiki/private/` 因含入库的 README 按条目展开，其下已有的私有页进 worktree 的是副本而非链接，worktree 里新写或改动的私有页不会回到根工作区——私有区按内容目录的纪律只在根工作区写；`.claude/settings.local.json` 由 Claude 原生回读，不共享。接线前已存在的 worktree 手动执行通用 skill 的 `worktree-share.sh link <路径>`。Windows 无符号链接权限时目录项会告警并跳过，不退回目录联接。link 只按根工作区当时已有的条目共享一次：之后在 worktree 里新建的被忽略条目（新 clone 进 `repos/` 的仓库、实例追加的采集目录下的新周期数据等）与对副本的改动都不会回到根工作区，而 `git worktree remove` 不检查被忽略文件，不加 `--force` 也会一并删除——删 worktree 前先列出并回收（命令见 `docs/workflows/记忆与多Agent.md`「本仓特有的部分」），采集类任务优先在根工作区跑。
 
 ## 域扩展
 
