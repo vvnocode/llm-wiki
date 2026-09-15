@@ -51,13 +51,13 @@
 
 ## 提交与分支约定
 
-分支只有两类：**`main` 唯一长期分支**（知识、数据与实例配置的最终落点；没有远端也必须本地提交）；**短期任务分支**一律放 `.worktrees/{任务名}/`，验证后 `--no-ff` 合回其目标分支并删除（目标分支见下「一个 worktree 一个合入目标」，实例仓即 `main`）；合入前是否要等用户确认只看改动落点，见下「合并确认门」。模板升级直接在 `main` 上 merge（**禁止 rebase**——rebase 会重写 main 历史，破坏既有产出对提交的追溯，也会与远端历史分裂；merge 节点本身就是升级留痕）；预计冲突较大时先在 `.worktrees/upgrade-{版本}/` 演练，绿后再正式 merge。建 worktree 用裸 `git worktree add`（或规则仓 `agent-memory-setup` 提供的 `worktree-share.sh link` 补挂），post-checkout 钩子会按内置清单和仓根 `.worktree-share` 共享被 gitignore 的本机资产；共享目录的 `.gitignore` 规则不带尾斜杠（尾斜杠不匹配软链）。
+分支只有两类：**`main` 唯一长期分支**（知识、数据与实例配置的最终落点；没有远端也必须本地提交）；**短期任务分支**一律放 `.worktrees/{任务名}/`，验证后 `--no-ff` 合回其目标分支并删除（目标分支见下「一个 worktree 一个合入目标」，实例仓即 `main`；删除前按 `docs/workflows/记忆与多Agent.md` 回收 worktree 里新建的被忽略条目）；合入前是否要等用户确认只看改动落点，见下「合并确认门」。模板升级直接在 `main` 上 merge（**禁止 rebase**——rebase 会重写 main 历史，破坏既有产出对提交的追溯，也会与远端历史分裂；merge 节点本身就是升级留痕）；预计冲突较大时先在 `.worktrees/upgrade-{版本}/` 演练，绿后再正式 merge。建 worktree 用裸 `git worktree add`（或规则仓 `agent-memory-setup` 提供的 `worktree-share.sh link` 补挂），post-checkout 钩子会按内置清单和仓根 `.worktree-share` 共享被 gitignore 的本机资产；共享目录的 `.gitignore` 规则不带尾斜杠（尾斜杠不匹配软链）。
 
 **何时必须建短期分支**：内容目录——`wiki/`、`inputs/`、`outputs/`、`state/`、`.memory/`——的写入直接在 `main` 提交，`sync.sh` 即此路径；**白名单之外的任何文件改动，不论大小，一律先建 worktree**（模板升级 merge 按上一段执行，不属此列）。按改动落点而非任务类型判定：枚举「哪些任务要建」是开放清单，会随功能新增而漏；新增功能必然改动白名单外的文件，天然落入 worktree。一次改动同时涉及内容与骨架的，整体走 worktree。实例可在实例段**收紧**白名单（如要求某类产出也走 worktree），两段不一致时按收紧者执行；收紧只改「是否建 worktree」，不得把内容产出改成需用户确认。
 
 **合并确认门与一任务一合**：内容目录的 worktree（跨会话迭代的长任务才需要）验证后由 agent 自行 `--no-ff` 合一次并删除，**无需用户确认**；白名单之外的骨架改动（改框架、加板块、改约束、加改脚本与模板）做完停下报告——改了哪些文件、验证结果、合入目标——**等用户确认**后再合入并删除，未经确认不得合入或删除。**一个任务只合一次**：改口吻、补数据、出 HTML 这类返工都提交在同一分支，同一任务跨会话沿用原 worktree，不得每轮返工各合一次（2026-09-03 教训：一份月报在实例 `main` 留下五个 merge 节点）。
 
-**一个 worktree 一个合入目标**：worktree 从这次改动要合回的分支拉出，验证后 `--no-ff` 合回同一分支，不并行合入多条长期分支。维护者合一仓的骨架改动以 `template` 为基线且只合回 `template`，进入 `main` 走版本发布后的升级 merge（合一仓的 `main` 等同第一个实例，与其他实例同一同步方式）；仅实例侧配置才以 `main` 为基线。发布一律用 `scripts/release.sh`（先跑 release-check 敏感扫描再推全部发布远端，配套 pre-push hook 见 README「模板维护者」节），不得手工 `git push` 发布远端。合并操作在任务 worktree 内执行：在 worktree 里 checkout 目标分支后 merge 任务分支；**根工作区始终留在 `main`**，不得为合并切换根工作区——会打断其他会话的内容写入。
+**一个 worktree 一个合入目标**：worktree 从这次改动要合回的分支拉出，验证后 `--no-ff` 合回同一分支，不并行合入多条长期分支。维护者合一仓的骨架改动以 `template` 为基线且只合回 `template`，进入 `main` 走版本发布后的升级 merge（合一仓的 `main` 等同第一个实例，与其他实例同一同步方式）；仅实例侧配置才以 `main` 为基线。发布一律用 `scripts/release.sh`（先跑 release-check 敏感扫描再推全部发布远端，配套 pre-push hook 见 README「模板维护者」节），不得手工 `git push` 发布远端。合并在哪执行，看目标分支是否已被根工作区检出：已检出（实例仓合回 `main`）时，直接在根工作区 `merge --no-ff` 任务分支，不切换分支——同一分支不能同时被两个工作区检出，在任务 worktree 里 checkout `main` 会失败；未被检出（合一仓合回 `template`）时，在任务 worktree 里 checkout 目标分支后 merge，任务分支也在该 worktree 里 `git branch -d` 后再删 worktree（根工作区 HEAD 是 `main`，在那里 `-d` 会判为未合入）。**根工作区始终留在 `main`**，不得为合并切换根工作区——会打断其他会话的内容写入；在根工作区 merge 遇到冲突或被本地改动拦下时，停下交人工，不得 stash、reset 他人在途改动。
 
 提交前缀：
 
