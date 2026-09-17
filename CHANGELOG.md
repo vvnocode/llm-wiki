@@ -6,6 +6,7 @@
 
 - 实例 `main` 不再跟踪远端：`bootstrap.sh` 新增步骤 8、`bootstrap.ps1` 新增步骤 7，每次运行都清掉 `main` 的上游跟踪（`branch.main.remote` 与 `branch.main.merge`），远端本身与其他分支不动，已不跟踪时只报告。此前 `git clone <模板仓URL>` 让 `main` 跟踪 `origin/main`，部署时 `git remote rename origin upstream` 又把跟踪带到 `upstream/main`；`git status` 与 IDE 据此显示「领先 N、可推送」，IDE 的同步 / 发布分支按钮或裸 `git push`（`push.default=simple`）会把实例内容快进推上模板仓，对模板仓有写权限时即推送成功。推个人仓由 `sync.sh` 显式指定 `origin`，发布模板走 `release.sh`，升级显式 `merge upstream/main`，都不依赖跟踪，故不区分跟踪的是模板仓还是个人仓，一律去掉。`AGENTS.md`「提交与分支约定」补「`main` 不跟踪远端」一段。回归测试 `tests/test_bootstrap_main_no_upstream.py` 覆盖跟踪 upstream、跟踪 origin 与幂等重跑。`bootstrap.ps1` 新增步骤在 macOS 的 pwsh 7.6.6 上实跑通过、全文件语法解析无误，Windows PowerShell 5.1 待真机验收。
 - 安装命令改为 `git clone -o upstream <模板仓URL>`（README「手动安装」、`SETUP-FOR-AI.md` 第 2 步），模板仓从一开始就叫 `upstream`，`origin` 留给个人仓。旧命令 clone 出的实例 `origin` 指向模板仓，而 `sync.sh` 有 `origin` 就推送，第一次 ingest 收口就会把个人内容推向模板仓；`SETUP-FOR-AI.md` 第 5 步的 `git remote add origin` 在那种状态下也会报远端已存在。README「模板升级与维护」与 `SETUP-FOR-AI.md` 第 5 步的升级说明补「升级后重跑 bootstrap」。
+- 文档：`docs/plans/2026-08-30-双形态支持.md` 与 `docs/specs/2026-08-30-双形态支持-design.md` 中的本机绝对路径与会话临时目录改为 `<实例目录>`、`<会话临时目录>` 占位或实例名，模板发布内容不再含维护者本机路径。
 - 迁移：先 `git remote -v` 检查，`origin` 若指向模板仓，执行 `git remote rename origin upstream`（改名会把 `main` 的跟踪一并带过去）。然后升级 merge，并在根工作区重跑 `./scripts/bootstrap.sh`（Windows `bootstrap.ps1`），`main` 的跟踪即被去掉；不重跑的，手动执行 `git branch --unset-upstream main`。
 
 ## v0.3.4 (2026-09-15)
