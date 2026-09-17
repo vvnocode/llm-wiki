@@ -11,7 +11,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
     commit=$(git rev-parse "$local_sha^{commit}" 2>/dev/null) || continue
     if ! git merge-base --is-ancestor "$commit" refs/heads/template; then
-        echo "✗ 阻断：$local_ref 不在 template 历史内——发布远端「$remote」只接受模板内容。"
+        echo "✗ 阻断：$local_ref 不在 template 历史内——发布远端「${remote}」只接受模板内容。"
         echo "  发布模板请用 scripts/release.sh。"
         exit 1
     fi

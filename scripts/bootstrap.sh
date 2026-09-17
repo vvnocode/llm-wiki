@@ -14,7 +14,7 @@ cd "$ROOT"
 
 # 只在根工作区运行：附属 worktree 里的本机设置由 agent-memory-setup 按主工作区规则处理，不能在此改写。
 if [ "$(cd "$(git rev-parse --git-dir)" && pwd -P)" != "$(cd "$(git rev-parse --git-common-dir)" && pwd -P)" ]; then
-    echo "✗ 当前是附属 worktree（$ROOT），请在根工作区运行 bootstrap：$(git worktree list --porcelain | head -1 | sed 's/^worktree //')" >&2
+    echo "✗ 当前是附属 worktree（${ROOT}），请在根工作区运行 bootstrap：$(git worktree list --porcelain | head -1 | sed 's/^worktree //')" >&2
     exit 1
 fi
 
@@ -71,7 +71,7 @@ ensure_link() {
         if [ "$cur" = "$target" ]; then
             echo "· $link 已就位"
         else
-            echo "⚠ $link 已是软链但指向 $cur（期望 $target），保持不动，请人工确认"
+            echo "⚠ $link 已是软链但指向 ${cur}（期望 ${target}），保持不动，请人工确认"
         fi
         return
     fi
