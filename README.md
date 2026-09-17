@@ -31,7 +31,7 @@ llm-wiki 把知识库从项目里拿出来，放到一个**由固定入口发现
 **macOS / Linux**：
 
 ```bash
-git clone <模板仓URL> ~/AI/llm-wiki    # 实例目录任选
+git clone -o upstream <模板仓URL> ~/AI/llm-wiki    # 实例目录任选；模板仓命名为 upstream，origin 留给个人仓
 cd ~/AI/llm-wiki
 ./scripts/bootstrap.sh --mode global    # 专项工作台改 --mode project；缺省时交互询问
 ```
@@ -39,7 +39,7 @@ cd ~/AI/llm-wiki
 **Windows**（PowerShell 5.1+，无需管理员）：
 
 ```powershell
-git clone <模板仓URL> $env:USERPROFILE\llm-wiki    # 实例目录任选
+git clone -o upstream <模板仓URL> $env:USERPROFILE\llm-wiki    # 实例目录任选；模板仓命名为 upstream，origin 留给个人仓
 cd $env:USERPROFILE\llm-wiki
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode global    # 专项工作台改 -Mode project
 ```
@@ -51,7 +51,7 @@ bootstrap 幂等（重复执行安全，已存在的配置只提示不覆盖；�
 3. 仓内多工具入口与记忆配置，委托公开 skill `agent-memory-setup` 的 setup 脚本：`CLAUDE.md` 只含一行 `@AGENTS.md` 引用（入库，任何平台检出即生效）、`.memory/MEMORY.md`、Claude `autoMemoryDirectory`、Codex 记忆照常开启并由 `memory-sync` 同步回 `.memory/`；skill 未安装时先装到 `~/.agents/skills`、`~/.claude/skills`、`~/.codex/skills`（幂等）。机制、验证与陷阱见该 skill 的 SKILL.md，本仓特有部分见 `docs/workflows/记忆与多Agent.md`；
 4. `.claude/skills/`、`.codex/skills/` 项目级兼容链接（已随仓入库，bootstrap 只补缺）；
 5. 通用 worktree 共享钩子由 `agent-memory-setup` 安装（`git worktree add` 后按内置清单和本仓根目录 `.worktree-share` 共享被 gitignore 的本机资产）；
-6. 打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
+6. 去掉 `main` 的上游跟踪（实例 `main` 不跟踪任何远端，防止 IDE 同步按钮或裸 `git push` 把个人内容推上模板仓），打印远端配置指引；全局模式另打印可粘贴的全局路由段，专项模式打印就绪提示。
 
 **接入全局指令**（仅全局模式；这是全局形态唯一的外部前置——让「全局知识工作台」路由段进入你的全局规则，二选一）：
 
@@ -163,10 +163,11 @@ llm-wiki/
 
 ## 模板升级与维护
 
-**使用者**：实例的 `origin` 指个人仓、`upstream` 指模板仓，升级：
+**使用者**：实例的 `origin` 指个人仓、`upstream` 指模板仓（安装时 `git clone -o upstream` 即按此命名；按旧命令 clone 的实例若 `origin` 仍指向模板仓，先 `git remote rename origin upstream`，否则 `sync.sh` 会把个人内容推上模板仓）。`main` 不跟踪任何远端，推个人仓只走 `sync.sh`。升级后在根工作区重跑 bootstrap（Windows 用 `bootstrap.ps1`），它会顺带去掉 `main` 的跟踪：
 
 ```bash
 git fetch upstream && git merge upstream/main
+./scripts/bootstrap.sh
 ```
 
 **模板维护者**（同一仓库同时是自己的实例时）：模板历史维护在 `template` 分支，实例在 `main`；模板改进在 `template` 分支提交，实例 `git merge template` 同步——与使用者的 upstream 模式同构。对外发布推 `template` 分支。

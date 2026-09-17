@@ -29,7 +29,7 @@
 macOS / Linux：
 
 ```bash
-git clone <本仓库URL> <用户选择的目录>
+git clone -o upstream <本仓库URL> <用户选择的目录>
 cd <用户选择的目录>
 ./scripts/bootstrap.sh --mode <global|project，按第 1 步的选择>
 ```
@@ -37,12 +37,14 @@ cd <用户选择的目录>
 Windows（PowerShell）：
 
 ```powershell
-git clone <本仓库URL> <用户选择的目录>
+git clone -o upstream <本仓库URL> <用户选择的目录>
 cd <用户选择的目录>
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Mode <global|project，按第 1 步的选择>
 ```
 
-bootstrap 幂等（重复执行安全），会完成：多工具入口与仓库内记忆（委托 skill `agent-memory-setup`：`CLAUDE.md` 引用行、`.memory/`、Claude 记忆路径、Codex 记忆同步配置）、Claude/Codex 项目级 Skill 链接、worktree 共享钩子（`.git/hooks/post-checkout`）；全局形态另建发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录，及全局 Skill 链接（ingest/query/lint/learn，两形态合计 16 个链接，专项形态仅仓内 8 个）。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
+`-o upstream` 把模板仓命名为 `upstream`，`origin` 留给用户的个人 wiki 仓：`sync.sh` 有 `origin` 就推送，按默认名 clone 时 `origin` 指向模板仓，第一次 ingest 收口就会把个人内容推向模板仓。
+
+bootstrap 幂等（重复执行安全），会完成：多工具入口与仓库内记忆（委托 skill `agent-memory-setup`：`CLAUDE.md` 引用行、`.memory/`、Claude 记忆路径、Codex 记忆同步配置）、Claude/Codex 项目级 Skill 链接、worktree 共享钩子（`.git/hooks/post-checkout`）、去掉 `main` 的上游跟踪（实例 `main` 不跟踪任何远端）；全局形态另建发现链接 `~/.llm-wiki`（Windows 为 `%USERPROFILE%\.llm-wiki` junction）→ 实例目录，及全局 Skill 链接（ingest/query/lint/learn，两形态合计 16 个链接，专项形态仅仓内 8 个）。输出中出现「已是链接但指向……请人工确认」说明本机已有其他实例，停下来问用户。
 
 ## 第 3 步：验证
 
@@ -70,7 +72,7 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 
 - 用户有个人 wiki 远程仓库：`git remote add origin <URL>`，之后每次 ingest 收口自动推送。
 - 暂时没有：跳过，sync 会只做本地提交，配置远端后自动恢复上传。
-- 模板升级通道：`git remote add upstream <本模板仓URL>`；升级即 `git fetch upstream && git merge upstream/main`。
+- 模板升级通道：第 2 步的 `clone -o upstream` 已建好，无需再加；升级即 `git fetch upstream && git merge upstream/main`，随后在实例根目录重跑 bootstrap。
 
 ## 第 6 步：收尾报告
 
