@@ -61,7 +61,7 @@ class BootstrapChmodTest(unittest.TestCase):
 
     def test_only_shebang_files_get_exec_bit(self) -> None:
         """跑一次 bootstrap --mode project：带 shebang 的三个文件变为可执行，两个无 shebang 文件保持 644。"""
-        env = {**os.environ, "HOME": str(self.home)}
+        env = {**os.environ, "HOME": str(self.home), "LC_ALL": "en_US.UTF-8"}   # UTF-8：覆盖 bash 3.2 的多字节解析路径
         proc = subprocess.run(
             ["bash", "scripts/bootstrap.sh", "--mode", "project"],
             cwd=self.repo,

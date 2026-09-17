@@ -7,3 +7,5 @@
 | `lint-wiki.py` | wiki 机械体检：断链、索引覆盖、来源/核验节、log 格式、孤儿页等；按脚本位置定位仓根，任意 cwd 可跑（`--root` 供测试夹具） |
 | `new-domain.sh` | 生成域扩展口径骨架（`docs/domains/<域>.md`），不预建数据目录 |
 | `hooks/pre-push` | 模板维护者发布保护，见 README「模板升级与维护」 |
+
+编写约定：bash 脚本里变量后面紧跟中文等非 ASCII 字符时，一律写成 `${NAME}`。macOS 自带的 bash 3.2 在 UTF-8 语言环境下会把 `$NAME（` 里全角括号的首字节并入变量名，开了 `set -u` 的脚本直接报 unbound variable 退出。`tests/test_shell_utf8.py` 逐行扫描把关，并在 UTF-8 语言环境下实跑脚本。

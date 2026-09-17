@@ -68,7 +68,7 @@ class BootstrapMainNoUpstreamTest(unittest.TestCase):
 
     def run_bootstrap(self) -> subprocess.CompletedProcess:
         """在伪 HOME 下跑一次 bootstrap --mode project，要求退出码为 0。"""
-        env = {**os.environ, "HOME": str(self.home)}
+        env = {**os.environ, "HOME": str(self.home), "LC_ALL": "en_US.UTF-8"}   # UTF-8：覆盖 bash 3.2 的多字节解析路径
         proc = subprocess.run(
             ["bash", "scripts/bootstrap.sh", "--mode", "project"],
             cwd=self.repo, capture_output=True, text=True, env=env, check=False,

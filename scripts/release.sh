@@ -16,6 +16,6 @@ for r in "${REMOTES[@]}"; do
         git push "$r" template:main --tags
         echo "✓ 已发布到 $r"
     else
-        echo "· 跳过 $r（未配置）"
+        echo "· 跳过 ${r}（未配置）"
     fi
 done

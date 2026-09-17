@@ -33,10 +33,10 @@ if [ -f "$LOCAL_LIST" ]; then
     while IFS= read -r word; do
         [ -z "$word" ] && continue
         case "$word" in \#*) continue ;; esac
-        check "本地词表命中「$word」" "$word"
+        check "本地词表命中「${word}」" "$word"
     done < "$LOCAL_LIST"
 else
-    echo "· 提示：未找到 $LOCAL_LIST（本地敏感词表，建议维护者创建，已被 gitignore）"
+    echo "· 提示：未找到 ${LOCAL_LIST}（本地敏感词表，建议维护者创建，已被 gitignore）"
 fi
 
 if [ "$FAIL" -eq 0 ]; then

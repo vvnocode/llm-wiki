@@ -2,6 +2,12 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.6 (2026-09-17)
+
+- 修复 bash 3.2 在 UTF-8 语言环境下误解析变量名：`scripts/` 下 7 处 `$NAME` 紧跟全角标点改为 `${NAME}`（`bootstrap.sh` 3 处、`release-check.sh` 2 处、`release.sh` 1 处、`hooks/pre-push` 1 处）。macOS 自带的 bash 3.2.57 在 UTF-8 下会把紧跟的多字节字符首字节并入变量名：开了 `set -u` 的脚本报 `NAME�: unbound variable` 退出，没开的展开为空并残留乱码。v0.3.5 发布时 `release-check.sh` 在 Terminal.app 中就因「未找到本地词表」那一行失败，只能 `LC_ALL=C` 绕过。同样受影响的还有：bootstrap 在附属 worktree 中的拒绝提示、`~/.llm-wiki` 已指向别处时的告警（两处都会让 bootstrap 中断）、`release.sh` 跳过未配置远端的提示、release-check 命中本地词表时的告警，以及 pre-push 阻断提示里的远端名。Agent 派生的子进程常不设 `LANG`，在 C 语言环境下跑的测试与手工验证都没有暴露。
+- 测试：新增 `tests/test_shell_utf8.py`，一是静态契约逐行扫描 `scripts/` 下全部 bash 脚本（跳过注释与带引号 heredoc 的正文），二是在 `LC_ALL=en_US.UTF-8` 下实跑 release-check、release、pre-push 与 bootstrap 的上述分支；既有四个 bootstrap 测试的运行环境也改为 UTF-8。`scripts/README.md` 补编写约定。
+- 迁移：无动作。维护者发布不再需要 `LC_ALL=C`。
+
 ## v0.3.5 (2026-09-17)
 
 - 实例 `main` 不再跟踪远端：`bootstrap.sh` 新增步骤 8、`bootstrap.ps1` 新增步骤 7，每次运行都清掉 `main` 的上游跟踪（`branch.main.remote` 与 `branch.main.merge`），远端本身与其他分支不动，已不跟踪时只报告。此前 `git clone <模板仓URL>` 让 `main` 跟踪 `origin/main`，部署时 `git remote rename origin upstream` 又把跟踪带到 `upstream/main`；`git status` 与 IDE 据此显示「领先 N、可推送」，IDE 的同步 / 发布分支按钮或裸 `git push`（`push.default=simple`）会把实例内容快进推上模板仓，对模板仓有写权限时即推送成功。推个人仓由 `sync.sh` 显式指定 `origin`，发布模板走 `release.sh`，升级显式 `merge upstream/main`，都不依赖跟踪，故不区分跟踪的是模板仓还是个人仓，一律去掉。`AGENTS.md`「提交与分支约定」补「`main` 不跟踪远端」一段。回归测试 `tests/test_bootstrap_main_no_upstream.py` 覆盖跟踪 upstream、跟踪 origin 与幂等重跑。`bootstrap.ps1` 新增步骤在 macOS 的 pwsh 7.6.6 上实跑通过、全文件语法解析无误，Windows PowerShell 5.1 待真机验收。
