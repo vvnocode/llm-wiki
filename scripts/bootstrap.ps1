@@ -7,7 +7,7 @@
 #
 # 做的事：
 #   %USERPROFILE%\.llm-wiki 发现 junction、全局 Skill junction（三处发现根）、项目级 Skill junction、
-#   特有共享清单、远端指引；通用 worktree 钩子由 agent-memory-setup 委托安装。
+#   特有共享清单、去掉 main 的上游跟踪、远端指引；通用 worktree 钩子由 agent-memory-setup 委托安装。
 # 不读取、不写入用户凭据文件。兼容 Windows PowerShell 5.1 与 PowerShell 7。
 #
 # 用法：在仓库根目录执行  powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 [-Mode global|project]
@@ -153,7 +153,21 @@ foreach ($destRoot in $destRoots) {
 
 # 6b) 通用 worktree 共享钩子由 agent-memory-setup/setup.ps1 安装；本仓只提供特有共享清单。
 
-# 7) 远端与接入指引（不代做）
+# 7) 实例 main 不跟踪任何远端分支（v0.3.5，与 bootstrap.sh 步骤 8 同构，理由见彼处注释）：只清 main 的两项跟踪配置，
+#    远端本身与其他分支不动；已不跟踪时只报告。git config --get 取不到值时只返回退出码 1、不写 stderr，
+#    在 ErrorActionPreference=Stop 下不会被包装成异常。
+$trackRemote = [string](git config --get branch.main.remote)
+$trackMerge = [string](git config --get branch.main.merge)
+if ($trackRemote -or $trackMerge) {
+    if ($trackRemote) { git config --unset-all branch.main.remote }
+    if ($trackMerge) { git config --unset-all branch.main.merge }
+    $trackedName = '{0}/{1}' -f $trackRemote, ($trackMerge -replace '^refs/heads/', '')
+    Write-Host "- 已去掉 main 对 $trackedName 的跟踪：实例 main 不跟踪远端，推个人仓走 sync.sh，发布模板走 release.sh"
+} else {
+    Write-Host "- main 未跟踪远端"
+}
+
+# 8) 远端与接入指引（不代做）
 # 注意：PS 5.1 在 ErrorActionPreference=Stop 下会把 native 命令的 stderr 包装成异常，
 # 因此用无 stderr 输出的 `git remote` 列表判断，不用 get-url 探测。
 Write-Host ""

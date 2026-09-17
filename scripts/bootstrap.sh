@@ -2,7 +2,7 @@
 # 一键初始化个人实例（双形态）。用法：bootstrap.sh [--mode global|project]
 #   global  全局工作台：~/.llm-wiki 发现软链 + 全局 Skill 软链（Claude / Codex）+ 仓内配置
 #   project 专项工作台：仅仓内配置（多工具入口与仓内记忆、项目级 Skill 软链、
-#           worktree 共享钩子、脚本权限、远端指引），不改动任何全局配置
+#           worktree 共享钩子、脚本权限、去掉 main 的上游跟踪、远端指引），不改动任何全局配置
 # 缺省 --mode 时按发现链探测；全新实例交互询问，非交互环境必须显式传参。
 # 多工具入口（CLAUDE.md 引用行）与仓内记忆（.memory/、Claude 记忆路径、Codex 记忆配置）不由本脚本自己写，
 # 委托合并进规则仓的公开 skill agent-memory-setup 的 setup.sh（步骤 3）；未安装时先装到全局 Skill 发现根，装 skill 本身幂等。
@@ -175,7 +175,21 @@ for f in scripts/*.sh scripts/*.py scripts/hooks/*; do
 done
 echo "· 脚本执行位：新加 ${EXEC_ADDED} 个（只处理带 shebang 的文件）"
 
-# 8) 远端指引（不代做）
+# 8) 实例 main 不跟踪任何远端分支（v0.3.5）：git clone 让 main 跟踪 origin/main，git remote rename 又把跟踪带到新名字下，
+#    git status 与 IDE 据此显示「领先 N、可推送」，IDE 的同步 / 发布按钮或裸 git push 会把个人内容推上模板仓。
+#    推个人仓由 sync.sh 显式指定 origin、发布模板走 release.sh，都不依赖跟踪，所以不区分跟踪的是哪个远端，一律去掉；
+#    只清 main 的两项跟踪配置，远端本身与其他分支不动。安装时与每次升级后重跑都会执行，已不跟踪时只报告。
+TRACK_REMOTE=$(git config --get branch.main.remote || true)
+TRACK_MERGE=$(git config --get branch.main.merge || true)
+if [ -n "${TRACK_REMOTE}${TRACK_MERGE}" ]; then
+    [ -n "$TRACK_REMOTE" ] && git config --unset-all branch.main.remote
+    [ -n "$TRACK_MERGE" ] && git config --unset-all branch.main.merge
+    echo "· 已去掉 main 对 ${TRACK_REMOTE:-?}/${TRACK_MERGE#refs/heads/} 的跟踪：实例 main 不跟踪远端，推个人仓走 sync.sh，发布模板走 release.sh"
+else
+    echo "· main 未跟踪远端"
+fi
+
+# 9) 远端指引（不代做）
 echo
 if ! git remote get-url upstream >/dev/null 2>&1; then
     echo "── 模板升级通道（可选）──"

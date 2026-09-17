@@ -53,6 +53,8 @@
 
 分支只有两类：**`main` 唯一长期分支**（知识、数据与实例配置的最终落点；没有远端也必须本地提交）；**短期任务分支**一律放 `.worktrees/{任务名}/`，验证后 `--no-ff` 合回其目标分支并删除（目标分支见下「一个 worktree 一个合入目标」，实例仓即 `main`；删除前按 `docs/workflows/记忆与多Agent.md` 回收 worktree 里新建的被忽略条目）；合入前是否要等用户确认只看改动落点，见下「合并确认门」。模板升级直接在 `main` 上 merge（**禁止 rebase**——rebase 会重写 main 历史，破坏既有产出对提交的追溯，也会与远端历史分裂；merge 节点本身就是升级留痕）；预计冲突较大时先在 `.worktrees/upgrade-{版本}/` 演练，绿后再正式 merge。建 worktree 用裸 `git worktree add`（或规则仓 `agent-memory-setup` 提供的 `worktree-share.sh link` 补挂），post-checkout 钩子会按内置清单和仓根 `.worktree-share` 共享被 gitignore 的本机资产；共享目录的 `.gitignore` 规则不带尾斜杠（尾斜杠不匹配软链）。
 
+**`main` 不跟踪远端**：`git clone` 让 `main` 跟踪 `origin/main`，`git remote rename` 又把跟踪带到新名字下，`git status` 与 IDE 据此显示「领先 N、可推送」，同步 / 发布按钮或裸 `git push` 会把个人内容推上模板仓。bootstrap 每次运行都会去掉 `main` 的跟踪，不得为了方便重新设上：推个人仓只走 `sync.sh`（显式指定 `origin`），发布模板只走 `scripts/release.sh`，升级显式 `git fetch upstream && git merge upstream/main`（合一仓为 `git merge template`），都不依赖跟踪。安装时用 `git clone -o upstream` 把模板仓命名为 `upstream`，`origin` 只留给个人仓。
+
 **何时必须建短期分支**：内容目录——`wiki/`、`inputs/`、`outputs/`、`state/`、`.memory/`——的写入直接在 `main` 提交，`sync.sh` 即此路径；**白名单之外的任何文件改动，不论大小，一律先建 worktree**（模板升级 merge 按上一段执行，不属此列）。按改动落点而非任务类型判定：枚举「哪些任务要建」是开放清单，会随功能新增而漏；新增功能必然改动白名单外的文件，天然落入 worktree。一次改动同时涉及内容与骨架的，整体走 worktree。实例可在实例段**收紧**白名单（如要求某类产出也走 worktree），两段不一致时按收紧者执行；收紧只改「是否建 worktree」，不得把内容产出改成需用户确认。
 
 **合并确认门与一任务一合**：内容目录的 worktree（跨会话迭代的长任务才需要）验证后由 agent 自行 `--no-ff` 合一次并删除，**无需用户确认**；白名单之外的骨架改动（改框架、加板块、改约束、加改脚本与模板）做完停下报告——改了哪些文件、验证结果、合入目标——**等用户确认**后再合入并删除，未经确认不得合入或删除。**一个任务只合一次**：改口吻、补数据、出 HTML 这类返工都提交在同一分支，同一任务跨会话沿用原 worktree，不得每轮返工各合一次（2026-09-03 教训：一份月报在实例 `main` 留下五个 merge 节点）。
