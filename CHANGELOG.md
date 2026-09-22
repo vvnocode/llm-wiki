@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.7 (2026-09-22)
+
+- `docs/workflows/记忆与多Agent.md`「删 worktree 前先回收」不再自带列出与回收命令，改为引用规则仓 skill `agent-memory-setup` 的 SKILL.md 同名条目（规则仓 2026-09-22 起自带该做法，含 `-z` 列出与 `rsync --safe-links --ignore-existing` 回收）；本仓只保留要特别当心的条目与「采集类任务优先在根工作区跑」的提醒。
+- 迁移：无动作。命令以 skill 正本为准，需要规则仓 2026-09-22 之后的版本（`~/.agents/skills/agent-memory-setup/SKILL.md` 含「删 worktree 前先回收」）。
+
 ## v0.3.6 (2026-09-17)
 
 - 修复 bash 3.2 在 UTF-8 语言环境下误解析变量名：`scripts/` 下 7 处 `$NAME` 紧跟全角标点改为 `${NAME}`（`bootstrap.sh` 3 处、`release-check.sh` 2 处、`release.sh` 1 处、`hooks/pre-push` 1 处）。macOS 自带的 bash 3.2.57 在 UTF-8 下会把紧跟的多字节字符首字节并入变量名：开了 `set -u` 的脚本报 `NAME�: unbound variable` 退出，没开的展开为空并残留乱码。v0.3.5 发布时 `release-check.sh` 在 Terminal.app 中就因「未找到本地词表」那一行失败，只能 `LC_ALL=C` 绕过。同样受影响的还有：bootstrap 在附属 worktree 中的拒绝提示、`~/.llm-wiki` 已指向别处时的告警（两处都会让 bootstrap 中断）、`release.sh` 跳过未配置远端的提示、release-check 命中本地词表时的告警，以及 pre-push 阻断提示里的远端名。Agent 派生的子进程常不设 `LANG`，在 C 语言环境下跑的测试与手工验证都没有暴露。
