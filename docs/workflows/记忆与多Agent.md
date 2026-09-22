@@ -19,16 +19,7 @@ bootstrap 按 `AGENT_MEMORY_SETUP` → `~/.agents/skills` → `~/.claude/skills`
 
 **worktree 里的记忆。** `settings.local.json` 被 gitignore，`git worktree add` 检出不到，worktree 会话的记忆目录会退回工具默认位置，仓内记忆整份不可见。规则仓 skill 安装的 post-checkout 钩子按通用清单和本仓根目录 `.worktree-share` 把根工作区本机资产共享进新 worktree；目录用软链，文件用副本，`.claude/settings.local.json` 由 Claude 原生回读而不共享。已存在的 worktree 手动执行该 skill 的 `worktree-share.sh link <路径>`。bootstrap 因此只能在根工作区运行：在附属 worktree 里改写会把根工作区的记忆路径指到 worktree。
 
-**删 worktree 前先回收。** link 只按根工作区当时已有的条目共享一次：之后在 worktree 里新建的被忽略条目（新 clone 进 `repos/` 的仓库、实例追加的采集目录下的新周期数据、新私有页）是 worktree 自己的真实文件，对副本的改动也只留在 worktree。`git worktree remove` 判断能否删除时只看入库文件的改动和未被忽略的未跟踪文件，被忽略文件不加 `--force` 也会一并删除。删之前列出这些条目，逐条确认后回收（`WT`、`ROOT` 为绝对路径）：
-
-```bash
-# 列出 worktree 里被忽略且不是软链的条目；-z 输出不给含空格或引号的路径加引号
-git -C "$WT" status --ignored=matching --porcelain -z | tr '\0' '\n' | sed -n 's/^!! //p' | sed 's#/$##' | while IFS= read -r p; do [ -L "$WT/$p" ] || echo "$p"; done
-# 回收其中一条（p 取上面列出的路径），根工作区已有的同名文件不覆盖
-mkdir -p "$(dirname "$ROOT/$p")" && rsync -a --ignore-existing "$WT/$p" "$(dirname "$ROOT/$p")/"
-```
-
-列出结果也含 link 时复制的副本，回收时因根工作区已有同名文件而跳过；改过的副本与根工作区那份比对后手工合并。采集类任务优先在根工作区跑：在 worktree 里跑时，整目录软链的采集游标（`state/collectors`）写回根工作区，新周期正文却随 worktree 删除。
+**删 worktree 前先回收。** link 只按根工作区当时已有的条目共享一次，之后在 worktree 里新建的被忽略条目和对副本的改动只留在 worktree，而 `git worktree remove` 不检查被忽略文件、不加 `--force` 也会一并删除。机制、列出命令与回收命令见 skill `agent-memory-setup` 的 SKILL.md「worktree 里效果不变」中「删 worktree 前先回收」一条（本机 `~/.agents/skills/agent-memory-setup/SKILL.md`），本仓不再复制一份。本仓要特别当心的条目：新 clone 进 `repos/` 的仓库、实例追加的采集目录下的新周期数据、新私有页。采集类任务优先在根工作区跑：在 worktree 里跑时，整目录软链的采集游标（`state/collectors`）写回根工作区，新周期正文却随 worktree 删除。
 
 **记忆记什么、和 wiki 怎么分。** 见 `docs/schemas/分区与共享.md`「与 `.memory/` 的分工」：记忆记做事方式（偏好、纠正、约束、指针），wiki 记事实结论（对象、机制、决策、案例）。
 
