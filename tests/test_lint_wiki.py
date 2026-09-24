@@ -2,7 +2,7 @@
 """lint-wiki.py 的夹具单测：现有每类机械检查各一红一绿，加两级索引、子索引规则、私有区豁免与外部来源前缀。
 
 夹具在临时目录里搭最小 wiki，用 `lint-wiki.py --root` 实跑脚本；不拿「当前仓库碰巧是绿的」当唯一证明。
-最后一个用例另外保证模板自带的种子 wiki 通过 lint。
+最后一个用例对当前仓库跑 lint：模板里是种子 wiki，实例里就是 lint 门禁。
 """
 from __future__ import annotations
 
@@ -245,9 +245,9 @@ class ExternalSourceRef(Fixture):
         self.assert_red("来源路径不存在 concepts/topic.md → `docs/concepts/queue.md`")
 
 
-class TemplateSeed(unittest.TestCase):
-    def test_template_seed_wiki_clean(self) -> None:
-        """模板自带的种子 wiki 必须通过机械 lint。"""
+class CurrentWiki(unittest.TestCase):
+    def test_current_wiki_clean(self) -> None:
+        """当前仓库的 wiki 必须通过机械 lint：模板里是种子 wiki，实例里就是 lint 门禁。"""
         proc = run_lint(ROOT)
         self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
 
