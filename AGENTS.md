@@ -55,7 +55,7 @@
 
 **`main` 不跟踪远端**：`git clone` 让 `main` 跟踪 `origin/main`，`git remote rename` 又把跟踪带到新名字下，`git status` 与 IDE 据此显示「领先 N、可推送」，同步 / 发布按钮或裸 `git push` 会把个人内容推上模板仓。bootstrap 每次运行都会去掉 `main` 的跟踪，不得为了方便重新设上：推个人仓只走 `sync.sh`（显式指定 `origin`），发布模板只走 `scripts/release.sh`，升级显式 `git fetch upstream && git merge upstream/main`（合一仓为 `git merge template`），都不依赖跟踪。安装时用 `git clone -o upstream` 把模板仓命名为 `upstream`，`origin` 只留给个人仓。
 
-**何时必须建短期分支**：内容目录——`wiki/`、`inputs/`、`outputs/`、`state/`、`.memory/`——的写入直接在 `main` 提交，`sync.sh` 即此路径；**白名单之外的任何文件改动，不论大小，一律先建 worktree**（模板升级 merge 按上一段执行，不属此列）。按改动落点而非任务类型判定：枚举「哪些任务要建」是开放清单，会随功能新增而漏；新增功能必然改动白名单外的文件，天然落入 worktree。一次改动同时涉及内容与骨架的，整体走 worktree。实例可在实例段**收紧**白名单（如要求某类产出也走 worktree），两段不一致时按收紧者执行；收紧只改「是否建 worktree」，不得把内容产出改成需用户确认。
+**何时必须建短期分支**：内容目录——`wiki/`、`inputs/`、`outputs/`、`state/`、`.memory/`——的写入直接在 `main` 提交，`sync.sh` 即此路径（默认只带 `wiki/`、`inputs/manual/`、`inputs/common/`、`state/`、`.memory/`，成稿与采集快照须作为参数显式传入，免得卷走并行会话的在途改动）；**白名单之外的任何文件改动，不论大小，一律先建 worktree**（模板升级 merge 按上一段执行，不属此列）。按改动落点而非任务类型判定：枚举「哪些任务要建」是开放清单，会随功能新增而漏；新增功能必然改动白名单外的文件，天然落入 worktree。一次改动同时涉及内容与骨架的，整体走 worktree。实例可在实例段**收紧**白名单（如要求某类产出也走 worktree），两段不一致时按收紧者执行；收紧只改「是否建 worktree」，不得把内容产出改成需用户确认。
 
 **合并确认门与一任务一合**：内容目录的 worktree（跨会话迭代的长任务才需要）验证后由 agent 自行 `--no-ff` 合一次并删除，**无需用户确认**；白名单之外的骨架改动（改框架、加板块、改约束、加改脚本与模板）做完停下报告——改了哪些文件、验证结果、合入目标——**等用户确认**后再合入并删除，未经确认不得合入或删除。**一个任务只合一次**：改口吻、补数据、出 HTML 这类返工都提交在同一分支，同一任务跨会话沿用原 worktree，不得每轮返工各合一次（2026-09-03 教训：一份月报在实例 `main` 留下五个 merge 节点）。
 

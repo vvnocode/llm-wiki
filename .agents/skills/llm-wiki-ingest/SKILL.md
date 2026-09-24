@@ -16,6 +16,6 @@ description: 把新原料编译进个人 LLM Wiki 工作台。用于导入、整
 4. 更新索引：项目分区改自己的 `index.md`；新分区或公共层新页更新根 `$WIKI/wiki/index.md`（两级索引，根只列入口）。子索引只放导航；写了正文就要带来源与核验。
 5. 在 `$WIKI/wiki/logs/YYYY-MM.md` 顶部追加 `## [YYYY-MM-DD] ingest | <标题>`；当月文件不存在则创建并更新 `$WIKI/wiki/log.md` 索引。
 6. 跑 lint skill（`python3 $WIKI/scripts/lint-wiki.py`），修机械问题。
-7. 收口：运行 `$WIKI/scripts/sync.sh "<主题>"` 完成提交与上传（rebase 冲突时脚本会停下交人工）。回复里列出改了哪些页。
+7. 收口：运行 `$WIKI/scripts/sync.sh "<主题>" [路径…]` 完成提交与上传：默认只带 wiki、原料与记忆，本轮的成稿目录与采集快照目录要作为参数传入，脚本会列出没带走的在途改动（多半是别的会话的，不要替它们提交）；rebase 冲突时脚本会停下交人工。回复里列出改了哪些页。
 
 凭证红线：密码、token、私钥、kubeconfig、完整连接串不进任何分区（含 private）。

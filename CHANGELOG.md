@@ -2,6 +2,11 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.11 (2026-09-24)
+
+- `scripts/sync.sh` 默认暂存范围收窄为本会话必然自己写的路径：`wiki`、`inputs/manual`、`inputs/common`、`state`、`.memory`；`inputs/raw`（各采集器快照）与 `outputs`（成稿）改为作为参数显式传入（`sync.sh "<主题>" <路径…>`，逐个校验在内容白名单内且存在）。没进暂存范围的在途改动按路径列出提醒，登记在 `CONTENT_EXCLUDES` 的目录不列。起因：一次收口把另一个会话正在写的 9 个采集文件与 2 个成稿卷进了无关提交。`AGENTS.md`、ingest Skill、`docs/workflows/工作方式.md`、`scripts/README.md` 同步；`tests/test_sync_guards.py` 加四例。
+- 迁移：实例里靠 `sync.sh` 提交成稿与采集快照的口径（日报、周报、周期分析等）改为把本轮的 `outputs/<目录>` 与 `inputs/raw/<源>/<周期>` 作为参数传入；只写 wiki、原料与记忆的收口不用改。实例自己的 sync 测试若假定 `inputs/raw` 会被默认带走要改。
+
 ## v0.3.10 (2026-09-24)
 
 - 语义 lint 有了产出物：lint Skill 第 4 步固定为六项（两页冲突、被新原料否定的旧结论、重要对象缺页、缺交叉引用、能靠读代码或公开文档补上的缺口、长期待核验），第 5 步改为每次跑完都追加 `lint` 日志（不论是否改动），第一行机械项数、再按六项各一行「无」或指向 open-questions 的条目；此前只在改过页面时才记，语义 lint 做没做无法回溯。`docs/schemas/wiki.md`「体检」同步；`tests/test_skill_contracts.py` 加契约。

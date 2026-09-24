@@ -173,5 +173,78 @@ class SyncGuardsTest(unittest.TestCase):
         self.assertNotIn("lint", proc.stdout.lower().replace("lint-wiki", ""))
 
 
+class SyncPathScopeTest(unittest.TestCase):
+    """默认只带本会话必然自己写的路径；inputs/raw 与 outputs 下的改动必须显式传路径，否则只提醒不带走。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name).resolve() / "repo"
+        (self.repo / "scripts").mkdir(parents=True)
+        shutil.copy(SYNC, self.repo / "scripts" / "sync.sh")
+        git(self.repo, "init", "-q", "-b", "main")
+        git(self.repo, "config", "user.name", "test")
+        git(self.repo, "config", "user.email", "test@example.com")
+        write(self.repo / "wiki/index.md", "# index\n")
+        write(self.repo / "inputs/manual/m.md", "# m\n")
+        write(self.repo / "inputs/raw/chats/2026-09/index.json", '{"v": 1}')
+        write(self.repo / "state/reporting/w.json", '{"v": 1}')
+        write(self.repo / "outputs/README.md", "成稿目录\n")   # outputs 本身已跟踪，未跟踪的是其下的新成稿目录（与真实实例一致）
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "init")
+        self.init_sha = git(self.repo, "rev-parse", "HEAD")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def run_sync(self, *paths: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(["bash", "scripts/sync.sh", "测试主题", *paths], cwd=self.repo, capture_output=True, text=True, env=UTF8_ENV)
+
+    def dirty_everything(self) -> None:
+        """模拟本会话写了 wiki / manual / state，另一个会话在途采集与成稿。"""
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        write(self.repo / "inputs/manual/m.md", "# m v2\n")
+        write(self.repo / "state/reporting/w.json", '{"v": 2}')
+        write(self.repo / "inputs/raw/chats/2026-09/index.json", '{"v": 2}')          # 他人在途采集（已跟踪）
+        write(self.repo / "outputs/2026-09-24-x/a.md", "草稿\n")                       # 他人在途成稿（未跟踪）
+
+    def test_default_scope_leaves_raw_and_outputs_and_reports_them(self) -> None:
+        self.dirty_everything()
+        proc = self.run_sync()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["inputs/manual/m.md", "state/reporting/w.json", "wiki/index.md"])
+        self.assertIn("inputs/raw/chats/2026-09/index.json", proc.stdout)
+        self.assertIn("outputs/2026-09-24-x/", proc.stdout)
+        self.assertIn("显式传路径", proc.stdout)
+        st = porcelain(self.repo)
+        self.assertEqual(st.get("inputs/raw/chats/2026-09/index.json"), " M")
+        self.assertEqual(st.get("outputs/2026-09-24-x/"), "??")
+
+    def test_explicit_paths_are_added_to_default_scope(self) -> None:
+        self.dirty_everything()
+        proc = self.run_sync("outputs/2026-09-24-x", "inputs/raw/chats/2026-09")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), [
+            "inputs/manual/m.md", "inputs/raw/chats/2026-09/index.json", "outputs/2026-09-24-x/a.md",
+            "state/reporting/w.json", "wiki/index.md",
+        ])
+        self.assertEqual(porcelain(self.repo), {})
+
+    def test_path_outside_whitelist_is_refused(self) -> None:
+        write(self.repo / "scripts/x.sh", "echo 1\n")
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync("scripts/x.sh")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("scripts/x.sh", proc.stdout + proc.stderr)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+
+    def test_no_default_change_but_raw_dirty_says_nothing_to_commit(self) -> None:
+        write(self.repo / "inputs/raw/chats/2026-09/index.json", '{"v": 2}')
+        proc = self.run_sync()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("无变更", proc.stdout)
+        self.assertIn("inputs/raw/chats/2026-09/index.json", proc.stdout)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+
+
 if __name__ == "__main__":
     unittest.main()
