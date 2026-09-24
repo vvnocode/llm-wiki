@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -62,6 +63,14 @@ class SyncGuardsTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def set_excludes(self, entries: str) -> None:
+        """把临时仓库里 sync.sh 的 CONTENT_EXCLUDES 整行换成给定内容；实例已登记排除项时同样适用。"""
+        script = self.repo / "scripts/sync.sh"
+        text = script.read_text(encoding="utf-8")
+        new_text, n = re.subn(r"^CONTENT_EXCLUDES=\([^)]*\)", f"CONTENT_EXCLUDES=({entries})", text, flags=re.M)
+        self.assertEqual(n, 1, "sync.sh 应有且只有一行 CONTENT_EXCLUDES=(…) 供实例登记排除项")
+        script.write_text(new_text, encoding="utf-8")
+
     def run_sync(self) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["bash", "scripts/sync.sh", "测试主题"], cwd=self.repo, capture_output=True, text=True, env=UTF8_ENV
@@ -113,13 +122,7 @@ class SyncGuardsTest(unittest.TestCase):
 
     def test_exclude_entries_apply_to_commit_too(self) -> None:
         """实例在 CONTENT_EXCLUDES 里登记的排除项，对暂存、判空和提交同时生效。"""
-        script = self.repo / "scripts/sync.sh"
-        text = script.read_text(encoding="utf-8")
-        self.assertIn("CONTENT_EXCLUDES=()", text, "sync.sh 应提供 CONTENT_EXCLUDES 数组供实例登记排除项")
-        script.write_text(
-            text.replace("CONTENT_EXCLUDES=()", "CONTENT_EXCLUDES=(':(exclude)inputs/raw/source-a')"),
-            encoding="utf-8",
-        )
+        self.set_excludes("':(exclude)inputs/raw/source-a'")
         write(self.repo / "inputs/raw/source-a/s.json", '{"v": 2}')
         write(self.repo / "inputs/manual/m.md", "# m v2\n")
         proc = self.run_sync()
@@ -129,13 +132,7 @@ class SyncGuardsTest(unittest.TestCase):
 
     def test_only_excluded_change_means_nothing_to_commit(self) -> None:
         """只有被排除的路径有改动时，判空要说无变更，而不是提交一个空提交或把排除项带进去。"""
-        script = self.repo / "scripts/sync.sh"
-        script.write_text(
-            script.read_text(encoding="utf-8").replace(
-                "CONTENT_EXCLUDES=()", "CONTENT_EXCLUDES=(':(exclude)inputs/raw/source-a')"
-            ),
-            encoding="utf-8",
-        )
+        self.set_excludes("':(exclude)inputs/raw/source-a'")
         write(self.repo / "inputs/raw/source-a/s.json", '{"v": 2}')
         proc = self.run_sync()
         self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
