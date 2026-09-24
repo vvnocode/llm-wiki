@@ -10,7 +10,8 @@
 算入链；来源、核验、断链、禁止来源照查。外部仓来源写 `<登记名>[@<ref>]:<仓内路径>`，不按本仓路径检查；
 裸写的仓内相对路径仍检查是否存在。
 
-过期核验、两页冲突、缺交叉引用是语义项，由 lint skill 的模型步骤做，本脚本不判。
+提示项（不计入退出码）：「最后核验」首条只写到月份的页。过期核验、两页冲突、缺交叉引用是语义项，由 lint skill
+的模型步骤做，本脚本不判。
 """
 from __future__ import annotations
 
@@ -49,6 +50,7 @@ HEADING_RE = re.compile(r"^#{1,6}\s")
 TABLE_ROW_RE = re.compile(r"^\|")
 LIST_WITH_LINK_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s+.*\[[^\]]*\]\([^)]+\)")
 HTML_COMMENT_RE = re.compile(r"^<!--.*-->$")
+VERIFY_MONTH_ONLY_RE = re.compile(r"^\d{4}-\d{2}$")
 
 
 def pages(wiki: str) -> list[str]:
@@ -158,6 +160,34 @@ def source_section(text: str) -> str:
     if nxt:
         return rest[: nxt.start() + 1]
     return rest
+
+
+def first_verify_token(text: str) -> str | None:
+    """「最后核验」节第一条的日期字样（括注与空白之前的部分）；没有该节或没有条目返回 None。"""
+    m = re.search(r"^## 最后核验[^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    if not m:
+        return None
+    for line in m.group(1).splitlines():
+        line = line.strip()
+        if line.startswith("- "):
+            return re.split(r"[（(\s]", line[2:].strip(), 1)[0]
+    return None
+
+
+def hints(root: str) -> list[str]:
+    """提示项：不算机械问题、不改退出码，只在输出末尾列出。目前一项：最后核验只写到月份。"""
+    wiki = os.path.join(root, "wiki")
+    if not os.path.isdir(wiki):
+        return []
+    out: list[str] = []
+    texts = page_texts(wiki)
+    for p in sorted(texts):
+        if not is_content_page(p, texts[p]):
+            continue
+        stamp = first_verify_token(texts[p])
+        if stamp and VERIFY_MONTH_ONLY_RE.match(stamp):
+            out.append(f"最后核验只到月份（需 YYYY-MM-DD）：{p}")
+    return out
 
 
 def lint(root: str) -> list[str]:
@@ -299,14 +329,19 @@ def main() -> int:
     if os.path.isdir(wiki):
         texts = page_texts(wiki)
         content_n = len([p for p in texts if is_content_page(p, texts[p])])
+    tips = hints(root)
     if not issues:
         print(f"wiki lint：{content_n} 页，未发现机械问题")
-        return 0
-    print(f"wiki lint：{len(issues)} 项")
-    for x in issues:
-        print(f"  - {x}")
-    print("\n只出清单。改之前仍走 docs/schemas/wiki.md 的写入门。")
-    return 1
+    else:
+        print(f"wiki lint：{len(issues)} 项")
+        for x in issues:
+            print(f"  - {x}")
+    for x in tips:
+        print(f"  - 提示：{x}")
+    if issues:
+        print("\n只出清单。改之前仍走 docs/schemas/wiki.md 的写入门。")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

@@ -68,6 +68,13 @@ class SkillContractTest(unittest.TestCase):
                 self.assertEqual(bare, [], f"{skill_file} 含裸相对路径：{bare}")
                 self.assertNotIn("~/.llm-wiki", body, f"{skill_file} 锚句外硬编码全局链")
 
+    def test_lint_skill_semantic_checklist(self) -> None:
+        """lint Skill 的语义层必须是固定六项清单，且每次跑完都要记 lint 日志（不论是否改动），否则语义 lint 做没做无法回溯。"""
+        text = (ROOT / ".agents/skills/llm-wiki-lint/SKILL.md").read_text(encoding="utf-8")
+        for item in ("两页冲突", "被新原料否定的旧结论", "重要对象缺页", "缺交叉引用", "能靠读代码或公开文档补上的缺口", "长期待核验"):
+            self.assertIn(item, text, f"lint Skill 缺语义项：{item}")
+        self.assertIn("不论是否改动", text, "lint Skill 须要求每次都追加 lint 日志")
+
 
 
 class ContentWhitelistTest(unittest.TestCase):

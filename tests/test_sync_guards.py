@@ -156,6 +156,22 @@ class SyncGuardsTest(unittest.TestCase):
         self.assertIn("无变更", proc.stdout)
         self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
 
+    def test_lint_runs_before_commit_without_blocking(self) -> None:
+        """仓里有 scripts/lint-wiki.py 时，提交前跑一次并打印结果；lint 红不阻断内容提交。"""
+        write(self.repo / "scripts/lint-wiki.py", "print('wiki lint：STUB 2 项')\nraise SystemExit(1)\n")
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("wiki lint：STUB 2 项", proc.stdout)
+        self.assertEqual(committed_files(self.repo), ["wiki/index.md"])
+
+    def test_no_lint_script_is_fine(self) -> None:
+        """没有 lint 脚本（夹具默认）照常提交，不报错。"""
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn("lint", proc.stdout.lower().replace("lint-wiki", ""))
+
 
 if __name__ == "__main__":
     unittest.main()
