@@ -81,8 +81,8 @@ class ContentWhitelistTest(unittest.TestCase):
         self.assertTrue(agents_dirs, "AGENTS.md 白名单句中未解析出目录")
 
         sync = (ROOT / "scripts" / "sync.sh").read_text(encoding="utf-8")
-        sm = re.search(r"for d in ([^;]+); do", sync)
-        self.assertIsNotNone(sm, "sync.sh 未找到 add_content 白名单循环")
+        sm = re.search(r"^CONTENT_DIRS=\(([^)]+)\)", sync, re.M)
+        self.assertIsNotNone(sm, "sync.sh 未找到 CONTENT_DIRS 白名单数组")
         sync_dirs = sm.group(1).split()
 
         self.assertEqual(
