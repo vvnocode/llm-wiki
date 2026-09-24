@@ -2,6 +2,13 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.10 (2026-09-24)
+
+- 语义 lint 有了产出物：lint Skill 第 4 步固定为六项（两页冲突、被新原料否定的旧结论、重要对象缺页、缺交叉引用、能靠读代码或公开文档补上的缺口、长期待核验），第 5 步改为每次跑完都追加 `lint` 日志（不论是否改动），第一行机械项数、再按六项各一行「无」或指向 open-questions 的条目；此前只在改过页面时才记，语义 lint 做没做无法回溯。`docs/schemas/wiki.md`「体检」同步；`tests/test_skill_contracts.py` 加契约。
+- `scripts/sync.sh` 提交前跑一次 `lint-wiki.py` 并打印结果，只提示不阻断（`python3` 或 `python`），日常 ingest 收口能看见红灯；`tests/test_sync_guards.py` 加两例。
+- `scripts/lint-wiki.py` 新增提示项：「最后核验」首条只写到月份的页在输出末尾列出，不计入退出码；补核验时换成 YYYY-MM-DD，不为消提示空改日期。`tests/test_lint_wiki.py` 加三例。
+- 迁移：无动作，升级 merge 即可。实例若改过 `sync.sh` 的 `commit_content`，冲突时取模板版本并保留自己的 `CONTENT_EXCLUDES`。
+
 ## v0.3.9 (2026-09-24)
 
 - 修复 `tests/test_sync_guards.py` 替换 `CONTENT_EXCLUDES` 行的正则：v0.3.8 用 `[^)]*` 匹配数组内容，实例登记了 `:(exclude)…` 排除项后在第一个右括号截断，替换出损坏的脚本，两个排除项用例在实例里误红；改为整行替换，并加用例覆盖「已登记含括号的排除项」。

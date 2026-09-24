@@ -245,6 +245,28 @@ class ExternalSourceRef(Fixture):
         self.assert_red("来源路径不存在 concepts/topic.md → `docs/concepts/queue.md`")
 
 
+class VerifyDateHint(Fixture):
+    """「最后核验」首条只写到月份：给提示但不算机械问题（退出码不变），首条是完整日期不提示。"""
+
+    def test_month_only_is_hint_not_error(self) -> None:
+        write(self.root, "wiki/concepts/topic.md", "# 主题\n\n事实。\n\n## 来源\n\n- `inputs/manual/fact.md`。\n\n## 最后核验\n\n- 2026-08\n")
+        proc = run_lint(self.root)
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+        self.assertIn("提示：最后核验只到月份（需 YYYY-MM-DD）：concepts/topic.md", proc.stdout)
+
+    def test_full_date_no_hint(self) -> None:
+        proc = run_lint(self.root)
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+        self.assertNotIn("提示：", proc.stdout)
+
+    def test_hint_printed_alongside_errors(self) -> None:
+        write(self.root, "wiki/concepts/topic.md", "# 主题\n\n见 [无](../missing.md)。\n\n## 来源\n\n- `inputs/manual/fact.md`。\n\n## 最后核验\n\n- 2026-08\n")
+        proc = run_lint(self.root)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("断链", proc.stdout)
+        self.assertIn("提示：最后核验只到月份", proc.stdout)
+
+
 class CurrentWiki(unittest.TestCase):
     def test_current_wiki_clean(self) -> None:
         """当前仓库的 wiki 必须通过机械 lint：模板里是种子 wiki，实例里就是 lint 门禁。"""

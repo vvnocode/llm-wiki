@@ -56,6 +56,15 @@ PATHSPEC+=(${CONTENT_EXCLUDES[@]+"${CONTENT_EXCLUDES[@]}"})
 
 # 返回 0 表示提交了，1 表示无变更。
 commit_content() {
+    # 提交前跑一次 wiki 机械 lint 并打印，只提示不阻断：内容提交不该被 lint 卡住，但红灯必须被看见。
+    if [ -f "$ROOT/scripts/lint-wiki.py" ]; then
+        local py
+        py=$(command -v python3 || command -v python || true)
+        if [ -n "$py" ]; then
+            echo "· 提交前 lint（只提示，不阻断）："
+            "$py" "$ROOT/scripts/lint-wiki.py" | sed 's/^/    /' || true
+        fi
+    fi
     git add -- "${PATHSPEC[@]}"
     if git diff --cached --quiet -- "${PATHSPEC[@]}"; then
         echo "· 无变更可提交"
