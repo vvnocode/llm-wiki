@@ -2,6 +2,13 @@
 
 模板版本记录。破坏性变更（目录改名、skill 接口变化、schema 不兼容调整）必须在此标注迁移方法。
 
+## v0.3.8 (2026-09-24)
+
+- lint 修三类误报并补夹具单测（OpenWiki 借鉴项 P1 第 1、3 条）：`scripts/lint-wiki.py` 支持 schema 规定的两级索引——被根 `index.md` 直接链接的子索引（`projects/<项目>/index.md`、`learning/index.md` 等任何 `*/index.md`），它链接的页面算已入索引；子索引没有被根 index 链接时只报一条「子索引未入根 index」，其下页面不再逐个报「未入 index」。子索引规则定为「纯导航免检两节，承载正文按事实页检查」：纯导航只允许标题、紧跟一级标题的一段导语、带链接的列表项、表格与 HTML 注释，出现第二段起的段落或没有链接的列表项即按事实页要求「来源」「最后核验」，不强制拆页。`wiki/private/` 只豁免「未入 index」与「孤儿页」，私有页发出的链接不给公共页算入链，来源、核验、断链、禁止来源照查。外部仓来源写成 `<登记名>[@<ref>]:<仓内路径>` 时不按本仓路径查存在性，裸写的仓内相对路径照查。新增 `tests/test_lint_wiki.py`：既有九类检查各一红一绿，加两级索引、子索引规则、私有区、外部前缀与模板种子 wiki，共 30 个用例；此前模板里 lint 脚本没有任何测试。一个实例 09-24 实跑的 24 项里 22 项属这三类误报（外部仓路径 18 处、私有区 4 项），红灯因此被忽略了一周。
+- 「最后核验」推进规则（P1 第 2 条，仅文档）：`docs/schemas/wiki.md` 示例改为 `- YYYY-MM-DD（核验方式；未覆盖范围）`，写明只在真正回读来源后才新增一行，改措辞、搬迁或合并页面、修链接、补交叉引用都不推进；ingest Skill 补半句。lint 不改。
+- `scripts/sync.sh` 按路径提交并加守卫（P1 第 6 条）：内容白名单改为 `CONTENT_DIRS` 数组，暂存、判空、提交用同一个路径数组（`git commit -- <路径>`），白名单外已暂存的骨架改动不再被带进 ingest 提交，提交后列出提醒；守卫放在任何 add 之前——合并 / 拣选 / 回退 / 变基进行中、`index.lock` 被占用、分离 HEAD、不在 `main` 上，一律拒绝且不动仓库。新增 `CONTENT_EXCLUDES` 数组供实例登记 `:(exclude)` 排除项，对暂存、判空、提交同时生效（git 2.50 实测）。新增 `tests/test_sync_guards.py`；`tests/test_skill_contracts.py` 的白名单同源检查改为解析 `CONTENT_DIRS`。`docs/workflows/工作方式.md` 与 `scripts/README.md` 同步。
+- 迁移：①实例 wiki 里引用外部仓文件的来源改写为前缀写法，登记名取 `config/registry.md` 或 `config/repos.conf` 里的名字，未登记的先登记；②实例若改过 `sync.sh` 的 `add_content`（如排除定时采集自行提交的快照目录），升级 merge 时取模板版本，把排除项写进 `CONTENT_EXCLUDES=(':(exclude)<路径>' …)`，实例自己的 sync 测试照跑；③实例若曾在任务分支上靠 `sync.sh` 提交内容，现在会被拒绝，改为手工 `git commit`；④子索引若已写了正文而没有「来源」「最后核验」，lint 会开始报，补两节即可；⑤实例自己的 lint 测试若与模板新增的 `tests/test_lint_wiki.py` 重复覆盖机械检查，可只保留实例断言。
+
 ## v0.3.7 (2026-09-22)
 
 - `docs/workflows/记忆与多Agent.md`「删 worktree 前先回收」不再自带列出与回收命令，改为引用规则仓 skill `agent-memory-setup` 的 SKILL.md 同名条目（规则仓 2026-09-22 起自带该做法，含 `-z` 列出与 `rsync --safe-links --ignore-existing` 回收）；本仓只保留要特别当心的条目与「采集类任务优先在根工作区跑」的提醒。
