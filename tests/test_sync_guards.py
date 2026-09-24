@@ -67,7 +67,7 @@ class SyncGuardsTest(unittest.TestCase):
         """把临时仓库里 sync.sh 的 CONTENT_EXCLUDES 整行换成给定内容；实例已登记排除项时同样适用。"""
         script = self.repo / "scripts/sync.sh"
         text = script.read_text(encoding="utf-8")
-        new_text, n = re.subn(r"^CONTENT_EXCLUDES=\([^)]*\)", f"CONTENT_EXCLUDES=({entries})", text, flags=re.M)
+        new_text, n = re.subn(r"^CONTENT_EXCLUDES=\(.*\)\s*$", f"CONTENT_EXCLUDES=({entries})", text, flags=re.M)
         self.assertEqual(n, 1, "sync.sh 应有且只有一行 CONTENT_EXCLUDES=(…) 供实例登记排除项")
         script.write_text(new_text, encoding="utf-8")
 
@@ -129,6 +129,23 @@ class SyncGuardsTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
         self.assertEqual(committed_files(self.repo), ["inputs/manual/m.md"])
         self.assertEqual(porcelain(self.repo).get("inputs/raw/source-a/s.json"), " M", "被排除的快照应保持未暂存")
+
+    def test_set_excludes_replaces_whole_line_even_with_registered_entries(self) -> None:
+        """实例已登记含括号的排除项时，整行替换仍得到合法脚本。
+
+        v0.3.8 的正则用 `[^)]*` 匹配数组内容，遇到 `:(exclude)` 的右括号就截断，替换后脚本损坏。
+        """
+        script = self.repo / "scripts/sync.sh"
+        text = script.read_text(encoding="utf-8")
+        script.write_text(
+            text.replace("CONTENT_EXCLUDES=()", "CONTENT_EXCLUDES=(':(exclude)inputs/raw/source-b')"),
+            encoding="utf-8",
+        )
+        self.set_excludes("':(exclude)inputs/raw/source-a'")
+        lines = [ln for ln in script.read_text(encoding="utf-8").splitlines() if ln.startswith("CONTENT_EXCLUDES=")]
+        self.assertEqual(lines, ["CONTENT_EXCLUDES=(':(exclude)inputs/raw/source-a')"])
+        syntax = subprocess.run(["bash", "-n", "scripts/sync.sh"], cwd=self.repo, capture_output=True, text=True)
+        self.assertEqual(syntax.returncode, 0, syntax.stderr)
 
     def test_only_excluded_change_means_nothing_to_commit(self) -> None:
         """只有被排除的路径有改动时，判空要说无变更，而不是提交一个空提交或把排除项带进去。"""
