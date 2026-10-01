@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -385,12 +386,91 @@ class SyncBuildIndexTest(RepoFixture):
         self.assertIn("- [本会话的新页](mine.md)", git(self.repo, "show", "HEAD:wiki/concepts/index.md"))
         self.assertEqual(porcelain(self.repo), {})
 
+    def test_index_generated_before_sync_is_still_committed(self) -> None:
+        """Agent 按流程先跑 build-index.py（让 lint 通过）再收口：磁盘上的索引此时已是最新，仍要随本次提交带上，
+        根索引的入口归一也一样。"""
+        write(self.repo / "wiki/concepts/mine.md", "# 本会话的新页\n")
+        subprocess.run([sys.executable, "scripts/build-index.py"], cwd=self.repo, check=True, capture_output=True)
+        proc = self.run_sync("测试主题", "wiki/concepts/mine.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(
+            committed_files(self.repo), ["wiki/concepts/index.md", "wiki/concepts/mine.md", "wiki/index.md"]
+        )
+        self.assertEqual(porcelain(self.repo), {})
+
+    def test_root_index_with_other_edits_is_not_swept(self) -> None:
+        """根索引里除了入口归一还有别的手工改动（可能是别的会话的）时，不替人提交，只列在在途清单里。"""
+        write(self.repo / "wiki/concepts/mine.md", "# 本会话的新页\n")
+        root_index = self.repo / "wiki/index.md"
+        root_index.write_text(root_index.read_text(encoding="utf-8") + "\n别的会话加的一行\n", encoding="utf-8")
+        proc = self.run_sync("测试主题", "wiki/concepts/mine.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/concepts/index.md", "wiki/concepts/mine.md"])
+        self.assertEqual(porcelain(self.repo), {"wiki/index.md": " M"})
+        self.assertIn("wiki/index.md", proc.stdout)
+
     def test_index_only_change_is_not_committed_alone(self) -> None:
         """没有自己的改动时不为生成索引单独造一个提交。"""
         proc = self.run_sync("测试主题")
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("无变更", proc.stdout)
         self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+
+
+class SyncRemoteTest(RepoFixture):
+    """有 origin 时：远端没有新提交就直接推送，工作区里别的会话的在途改动不挡路；远端有新提交才 rebase，
+    rebase 被在途改动挡住时停下，本地提交与在途改动都不丢。"""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.origin = self.repo.parent / "origin.git"
+        git(self.repo.parent, "init", "-q", "--bare", "-b", "main", str(self.origin))
+        git(self.repo, "remote", "add", "origin", str(self.origin))
+        git(self.repo, "push", "-q", "origin", "main")
+
+    def remote_head(self) -> str:
+        return git(self.origin, "rev-parse", "main")
+
+    def push_from_another_machine(self) -> str:
+        """模拟另一台机器向远端推了一个提交，返回它的 sha。"""
+        other = self.repo.parent / "other"
+        git(self.repo.parent, "clone", "-q", str(self.origin), str(other))
+        git(other, "config", "user.name", "other")
+        git(other, "config", "user.email", "other@example.com")
+        write(other / "wiki/from-other-machine.md", "# 另一台机器写的页\n")
+        git(other, "add", "-A")
+        git(other, "commit", "-q", "-m", "ingest: 另一台机器")
+        git(other, "push", "-q", "origin", "main")
+        return git(other, "rev-parse", "HEAD")
+
+    def test_pushes_even_when_others_changes_are_left_unstaged(self) -> None:
+        write(self.repo / "wiki/index.md", "# index v2\n")                  # 本会话
+        write(self.repo / "inputs/manual/m.md", "# m 被别的会话改了一半\n")   # 他人在途
+        proc = self.run_sync("测试主题", "wiki/index.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/index.md"])
+        self.assertEqual(self.remote_head(), git(self.repo, "rev-parse", "HEAD"))
+        self.assertEqual(porcelain(self.repo), {"inputs/manual/m.md": " M"})
+
+    def test_rebases_onto_new_remote_commits_when_tree_is_clean(self) -> None:
+        remote_sha = self.push_from_another_machine()
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync("测试主题", "wiki/index.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD~1"), remote_sha, "本地提交应接在远端的新提交之后")
+        self.assertEqual(self.remote_head(), git(self.repo, "rev-parse", "HEAD"))
+
+    def test_remote_ahead_and_dirty_tree_stops_without_losing_anything(self) -> None:
+        remote_sha = self.push_from_another_machine()
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        write(self.repo / "inputs/manual/m.md", "# m 被别的会话改了一半\n")
+        proc = self.run_sync("测试主题", "wiki/index.md")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("在途改动", proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/index.md"], "本地提交应已完成并保留")
+        self.assertEqual((self.repo / "inputs/manual/m.md").read_text(encoding="utf-8"), "# m 被别的会话改了一半\n")
+        self.assertEqual(porcelain(self.repo), {"inputs/manual/m.md": " M"})
+        self.assertEqual(self.remote_head(), remote_sha, "没推上去，远端不变")
 
 
 if __name__ == "__main__":

@@ -216,11 +216,18 @@ if git show-ref --verify --quiet refs/heads/template; then
         echo "· 模板维护者仓：origin 为模板发布远端，已跳过推送；个人上传请另配 personal 远端"
     fi
 elif git remote get-url origin >/dev/null 2>&1; then
-    # 先收本地未暂存改动再 rebase，避免脏工作区阻塞
     commit_content || true
-    if ! git pull --rebase origin "$BRANCH"; then
-        echo "✗ rebase 冲突，已停止。人工解决后重跑 sync.sh；禁止 force。"
+    if ! git fetch -q origin "$BRANCH"; then
+        echo "✗ 取不到 origin/${BRANCH}（网络或远端不可用）。本地提交已保留，稍后重跑 sync.sh。"
         exit 1
+    fi
+    # 远端没有本地缺少的提交时不 rebase：按路径提交后，工作区里常留着别的会话的在途改动，rebase 会被它们挡住。
+    if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
+        if ! git pull --rebase origin "$BRANCH"; then
+            echo "✗ 远端有新提交，但 rebase 没有完成：有冲突，或被工作区里的在途改动挡住。"
+            echo "  本地提交已保留。等在途改动收口或人工处理后重跑 sync.sh；禁止 force，也不要 stash 别的会话的改动。"
+            exit 1
+        fi
     fi
     git push origin "$BRANCH"
     echo "· 已提交并推送到 origin/${BRANCH}"

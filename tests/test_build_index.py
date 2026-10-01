@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -203,6 +204,39 @@ class FromGit(Fixture):
         (self.root / "wiki/concepts/tracked.md").unlink()
         self.build("--from-git")
         self.assertIn("- [已提交的页](tracked.md)\n", read(self.root, "wiki/concepts/index.md"))
+
+    def test_prints_generated_files_that_differ_from_head(self) -> None:
+        """--from-git 的标准输出是「要随提交带上的生成文件」：即使本次没有改写（之前手工跑过一次），
+        只要与 HEAD 有差异就列出；都已提交后不再列。"""
+        self.build()                                   # 先按磁盘生成一次：索引与根索引入口都已是最新，但还没提交
+        proc = self.build("--from-git")
+        self.assertEqual(
+            sorted(proc.stdout.split()),
+            ["wiki/concepts/index.md", "wiki/entities/index.md", "wiki/index.md", "wiki/risks/index.md"],
+        )
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "index")
+        self.assertEqual(self.build("--from-git").stdout, "")
+
+    def test_root_index_is_not_listed_when_it_has_other_pending_edits(self) -> None:
+        """根索引的待提交改动不只是入口归一时（还混着手工改动），不列出，由改它的会话自己提交。"""
+        root_index = self.root / "wiki/index.md"
+        root_index.write_text(root_index.read_text(encoding="utf-8") + "\n别的会话加的一行\n", encoding="utf-8")
+        proc = self.build("--from-git")
+        self.assertNotIn("wiki/index.md", proc.stdout.split())
+        self.assertIn("wiki/concepts/index.md", proc.stdout.split())
+        self.assertIn("(concepts/index.md)", read(self.root, "wiki/index.md"), "磁盘上的入口归一照做")
+
+    def test_chinese_paths_survive_a_non_utf8_locale(self) -> None:
+        """Agent 派生的子进程常不带 UTF-8 语言环境：git 输出仍按 UTF-8 解码，中文文件名与标题不能乱。"""
+        write(self.root, "wiki/concepts/中文页.md", "# 中文标题\n" + PAGE_TAIL)
+        git(self.root, "add", "-A")
+        env = {**os.environ, "LC_ALL": "en_US.ISO8859-1", "PYTHONUTF8": "0"}
+        proc = subprocess.run(
+            [sys.executable, str(BUILD), "--root", str(self.root), "--from-git"], cwd=ROOT, capture_output=True, env=env
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr.decode("utf-8", "replace"))
+        self.assertIn("- [中文标题](中文页.md)\n", read(self.root, "wiki/concepts/index.md"))
 
     def test_from_git_outside_a_repository_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
