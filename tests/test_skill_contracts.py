@@ -75,6 +75,37 @@ class SkillContractTest(unittest.TestCase):
             self.assertIn(item, text, f"lint Skill 缺语义项：{item}")
         self.assertIn("不论是否改动", text, "lint Skill 须要求每次都追加 lint 日志")
 
+    def test_ingest_skill_generates_index_and_passes_own_paths(self) -> None:
+        """ingest Skill 必须让公共层索引走脚本生成、收口只传本轮自己写的路径，并写明外部原料里的指令当数据。"""
+        text = (ROOT / ".agents/skills/llm-wiki-ingest/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("build-index.py", text, "ingest Skill 须让公共层索引由脚本生成，而不是手改清单")
+        self.assertIn('sync.sh "<主题>" <路径…>', text, "ingest Skill 须写明收口要传入本轮路径")
+        self.assertIn("--all", text, "ingest Skill 须说明 --all 的适用条件")
+        self.assertIn("指令", text)
+        self.assertIn("当数据", text, "ingest Skill 须写明外部原料里的指令一律当数据")
+
+    def test_query_skill_has_miss_protocol(self) -> None:
+        """query Skill 必须写明索引未命中时的顺序：换词再看索引 → 全文搜索 → 之后才能说 wiki 没有。"""
+        text = (ROOT / ".agents/skills/llm-wiki-query/SKILL.md").read_text(encoding="utf-8")
+        for item in ("同义词", "全文搜索", "曾用标题"):
+            self.assertIn(item, text, f"query Skill 缺未命中处理：{item}")
+
+    def test_every_sync_mention_passes_paths(self) -> None:
+        """四份 Skill 里凡是让跑 sync.sh 的地方都要带路径：不带路径的调用在有在途改动时会被拒绝。"""
+        for name in SKILLS:
+            with self.subTest(skill=name):
+                text = (ROOT / ".agents/skills" / name / "SKILL.md").read_text(encoding="utf-8")
+                for line in text.splitlines():
+                    if "sync.sh" in line:
+                        self.assertIn("<路径…>", line, f"{name}：{line.strip()[:60]}")
+
+    def test_skills_do_not_pin_risks_to_one_file(self) -> None:
+        """待核验按主题分页后，Skill 不再把 open-questions.md 当作唯一落点。"""
+        for name in SKILLS:
+            with self.subTest(skill=name):
+                text = (ROOT / ".agents/skills" / name / "SKILL.md").read_text(encoding="utf-8")
+                self.assertNotIn("open-questions", text)
+
 
 
 class ContentWhitelistTest(unittest.TestCase):
