@@ -181,6 +181,20 @@ class SyncGuardsTest(RepoFixture):
         self.assertIn("wiki lint：STUB 2 项", proc.stdout)
         self.assertEqual(committed_files(self.repo), ["wiki/index.md"])
 
+    def test_commit_failure_is_reported_not_swallowed(self) -> None:
+        """git commit 失败（这里用 pre-commit 钩子拒绝）时必须报错退出，不能照常打印成功；锁也要清掉。"""
+        hook = self.repo / ".git/hooks/pre-commit"
+        hook.parent.mkdir(parents=True, exist_ok=True)
+        hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        hook.chmod(0o755)
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync("测试主题", "wiki/index.md")
+        self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("提交失败", proc.stdout + proc.stderr)
+        self.assertNotIn("仅本地提交", proc.stdout)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+        self.assertFalse((self.repo / ".git/llm-wiki-sync.lock").exists())
+
     def test_no_lint_script_is_fine(self) -> None:
         """没有 lint 脚本（夹具默认）照常提交，不报错。"""
         write(self.repo / "wiki/index.md", "# index v2\n")
@@ -249,6 +263,40 @@ class SyncOwnPathsTest(RepoFixture):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("wiki/nope.md", proc.stdout + proc.stderr)
         self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+
+    def test_dotdot_cannot_escape_the_whitelist(self) -> None:
+        """路径里带 .. 时不能借白名单目录的前缀绕出去，把骨架文件提交到 main。"""
+        write(self.repo / "scripts/x.sh", "echo 2\n")
+        for path in ("wiki/../scripts/x.sh", "wiki/projects/../../scripts/x.sh"):
+            with self.subTest(path=path):
+                proc = self.run_sync("测试主题", path)
+                self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+                self.assertEqual(porcelain(self.repo), {"scripts/x.sh": " M"}, "拒绝时不得暂存")
+
+    def test_absolute_path_is_refused(self) -> None:
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync("测试主题", str(self.repo / "wiki/index.md"))
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+
+    def test_leading_dot_slash_is_accepted(self) -> None:
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync("测试主题", "./wiki/index.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/index.md"])
+
+    def test_ignored_path_is_refused(self) -> None:
+        """被 .gitignore 忽略的路径（如私有区）传进来时报错退出，而不是悄悄说「无变更」。"""
+        write(self.repo / ".gitignore", "wiki/private/*\n")
+        git(self.repo, "add", ".gitignore")
+        git(self.repo, "commit", "-q", "-m", "ignore")
+        head = git(self.repo, "rev-parse", "HEAD")
+        write(self.repo / "wiki/private/p.md", "# 私有页\n")
+        proc = self.run_sync("测试主题", "wiki/private/p.md")
+        self.assertNotEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("暂存失败", proc.stdout + proc.stderr)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), head)
 
     def test_path_outside_whitelist_is_refused(self) -> None:
         write(self.repo / "scripts/x.sh", "echo 2\n")
@@ -442,6 +490,16 @@ class SyncRemoteTest(RepoFixture):
         git(other, "commit", "-q", "-m", "ingest: 另一台机器")
         git(other, "push", "-q", "origin", "main")
         return git(other, "rev-parse", "HEAD")
+
+    def test_first_push_to_an_empty_remote(self) -> None:
+        """新建的个人仓还没有 main 分支：收口直接做首次推送，不因取不到远端分支而失败。"""
+        empty = self.repo.parent / "empty.git"
+        git(self.repo.parent, "init", "-q", "--bare", "-b", "main", str(empty))
+        git(self.repo, "remote", "set-url", "origin", str(empty))
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync("测试主题", "wiki/index.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(git(empty, "rev-parse", "main"), git(self.repo, "rev-parse", "HEAD"))
 
     def test_pushes_even_when_others_changes_are_left_unstaged(self) -> None:
         write(self.repo / "wiki/index.md", "# index v2\n")                  # 本会话

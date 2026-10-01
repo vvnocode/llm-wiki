@@ -105,7 +105,16 @@ if [ "$ALL" -eq 1 ]; then
     done
 fi
 for p in ${EXTRA_PATHS[@]+"${EXTRA_PATHS[@]}"}; do
+    # 归一：去掉开头的 ./ 与末尾的 /。不接受绝对路径、空路径和含 .. 的路径——
+    # wiki/../scripts/x.sh 这样的写法能借白名单目录的前缀绕到白名单之外。
+    while [ "${p#./}" != "$p" ]; do p="${p#./}"; done
     p="${p%/}"
+    case "/${p}/" in
+        //*|*/../*)
+            echo "✗ 路径须相对仓根，且不得含 ..：${p}"
+            exit 1
+            ;;
+    esac
     if ! in_content_dirs "$p"; then
         echo "✗ 路径不在内容白名单内：${p}（白名单：${CONTENT_DIRS[*]}）"
         exit 1
@@ -140,6 +149,7 @@ PATHSPEC+=(${CONTENT_EXCLUDES[@]+"${CONTENT_EXCLUDES[@]}"})
 # 锁是 git 公共目录下的一个目录（mkdir 原子创建，所有工作区共用）；拿不到就每秒重试，超时退出，不自动破锁。
 LOCK_DIR="$(cd "$(git rev-parse --git-common-dir)" && pwd)/llm-wiki-sync.lock"
 LOCK_TIMEOUT="${LLM_WIKI_SYNC_LOCK_TIMEOUT:-60}"
+case "$LOCK_TIMEOUT" in ''|*[!0-9]*) LOCK_TIMEOUT=60 ;; esac
 acquire_lock() {
     local waited=0
     while ! mkdir "$LOCK_DIR" 2>/dev/null; do
@@ -155,9 +165,9 @@ acquire_lock() {
         sleep 1
         waited=$((waited + 1))
     done
-    printf 'pid %s，%s\n' "$$" "$(date '+%Y-%m-%d %H:%M:%S')" > "${LOCK_DIR}/owner"
     # 只清自己拿到的锁：trap 在拿到之后才登记，超时退出的一方不会删掉别人的锁
     trap 'rm -rf "$LOCK_DIR"' EXIT
+    printf 'pid %s，%s\n' "$$" "$(date '+%Y-%m-%d %H:%M:%S')" > "${LOCK_DIR}/owner" || true
 }
 
 # 列出白名单内、但没进本次暂存范围的在途改动，只提醒不带走。
@@ -169,11 +179,15 @@ report_left_out() {
     fi
 }
 
-# 返回 0 表示提交了，1 表示无变更。
+# 返回 0 表示提交了，1 表示无变更；暂存或提交失败直接退出。
+# 本函数总在 if / || 语境里被调用，set -e 在其中不生效，所以关键步骤逐个显式判断。
 commit_content() {
     local py out generated left
     py=$(command -v python3 || command -v python || true)
-    git add -- "${PATHSPEC[@]}"
+    if ! git add -- "${PATHSPEC[@]}"; then
+        echo "✗ 暂存失败（见上方 git 输出），未提交。被 .gitignore 忽略的路径（如私有区）不要传给 sync.sh。"
+        exit 1
+    fi
     if git diff --cached --quiet -- "${PATHSPEC[@]}"; then
         report_left_out
         echo "· 无变更可提交"
@@ -185,8 +199,9 @@ commit_content() {
         if out=$("$py" "$ROOT/scripts/build-index.py" --from-git); then
             while IFS= read -r generated; do
                 [ -n "$generated" ] || continue
-                git add -- "$generated"
-                PATHSPEC+=("$generated")
+                if git add -- "$generated"; then
+                    PATHSPEC+=("$generated")
+                fi
             done <<< "$out"
         else
             echo "· build-index.py 运行失败，索引未更新（不阻断提交）"
@@ -198,7 +213,10 @@ commit_content() {
         "$py" "$ROOT/scripts/lint-wiki.py" | sed 's/^/    /' || true
     fi
     report_left_out
-    git commit -q -m "$MSG" -- "${PATHSPEC[@]}"
+    if ! git commit -q -m "$MSG" -- "${PATHSPEC[@]}"; then
+        echo "✗ 提交失败（见上方 git 输出）。本轮改动留在暂存区，处理后重跑 sync.sh。"
+        exit 1
+    fi
     left=$(git diff --cached --name-only)
     if [ -n "$left" ]; then
         echo "· 白名单外的已暂存改动未随本次提交（骨架改动请走 worktree）："
@@ -217,17 +235,24 @@ if git show-ref --verify --quiet refs/heads/template; then
     fi
 elif git remote get-url origin >/dev/null 2>&1; then
     commit_content || true
-    if ! git fetch -q origin "$BRANCH"; then
-        echo "✗ 取不到 origin/${BRANCH}（网络或远端不可用）。本地提交已保留，稍后重跑 sync.sh。"
-        exit 1
-    fi
-    # 远端没有本地缺少的提交时不 rebase：按路径提交后，工作区里常留着别的会话的在途改动，rebase 会被它们挡住。
-    if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
-        if ! git pull --rebase origin "$BRANCH"; then
-            echo "✗ 远端有新提交，但 rebase 没有完成：有冲突，或被工作区里的在途改动挡住。"
-            echo "  本地提交已保留。等在途改动收口或人工处理后重跑 sync.sh；禁止 force，也不要 stash 别的会话的改动。"
+    if git fetch -q origin "$BRANCH" 2>/dev/null; then
+        # 远端没有本地缺少的提交时不 rebase：按路径提交后，工作区里常留着别的会话的在途改动，rebase 会被它们挡住。
+        if ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            if ! git pull --rebase origin "$BRANCH"; then
+                echo "✗ 远端有新提交，但 rebase 没有完成：有冲突，或被工作区里的在途改动挡住。"
+                echo "  本地提交已保留。等在途改动收口或人工处理后重跑 sync.sh；禁止 force，也不要 stash 别的会话的改动。"
+                exit 1
+            fi
+        fi
+    else
+        # 取不到分支：ls-remote 退出码 2 表示远端可达但还没有这个分支（新建的空仓），直接做首次推送；其余算远端不可用
+        rc=0
+        git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1 || rc=$?
+        if [ "$rc" -ne 2 ]; then
+            echo "✗ 取不到 origin/${BRANCH}（网络或远端不可用）。本地提交已保留，稍后重跑 sync.sh。"
             exit 1
         fi
+        echo "· 远端还没有 ${BRANCH} 分支，首次推送"
     fi
     git push origin "$BRANCH"
     echo "· 已提交并推送到 origin/${BRANCH}"

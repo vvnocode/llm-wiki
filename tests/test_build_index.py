@@ -102,6 +102,16 @@ class SectionIndexContent(Fixture):
         self.build()
         self.assertIn("- [新标题](x.md)（曾用标题：旧名一、旧名二）\n", read(self.root, "wiki/concepts/index.md"))
 
+    def test_square_brackets_in_title_do_not_break_the_link(self) -> None:
+        """标题里的方括号会截断 Markdown 链接文字（lint 就认不出这条链接），生成时换成全角。"""
+        write(self.root, "wiki/concepts/x.md", "# [已废弃] 旧方案\n\n事实。\n" + PAGE_TAIL)
+        self.build()
+        self.assertIn("- [［已废弃］ 旧方案](x.md)\n", read(self.root, "wiki/concepts/index.md"))
+        proc = subprocess.run(
+            [sys.executable, str(LINT), "--root", str(self.root)], cwd=ROOT, capture_output=True, text=True
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
+
     def test_empty_section_has_header_and_lead_only(self) -> None:
         self.build()
         self.assertEqual(read(self.root, "wiki/entities/index.md"), f"# entities/ 索引\n\n{LEAD}\n")

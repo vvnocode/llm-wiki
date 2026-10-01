@@ -73,6 +73,8 @@ def entry(name: str, text: str) -> str:
     """一张页面在索引里的一行。"""
     h1 = H1_RE.search(text)
     title = h1.group(1) if h1 else name[: -len(".md")]
+    # 方括号会截断链接文字，换成全角
+    title = title.replace("[", "［").replace("]", "］")
     line = f"- [{title}]({name})"
     former = FORMER_TITLES_RE.search(text)
     if former:
