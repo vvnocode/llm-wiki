@@ -93,8 +93,8 @@ python3 -m unittest discover -s tests -v && python3 scripts/lint-wiki.py
 
 装好之后不需要记住任何命令——在任意项目里正常向 Agent 提问即可：
 
-- **查（query）**：排障、分析、设计、跨项目提问时，Agent 先读 `~/.llm-wiki/wiki/index.md` 下钻命中页，再回查项目源码，回答分「Wiki 结论 / 回查过的事实 / 待核验」。
-- **写（ingest）**：任务收口形成跨会话价值时，Agent 按三级判据写回对应分区、更新索引与当月日志，随后自动 `sync`（pull --rebase → commit → push；冲突停下交人工，无远端仅本地提交）。当轮说「不用写」即跳过。
+- **查（query）**：排障、分析、设计、跨项目提问时，Agent 先读 `~/.llm-wiki/wiki/index.md`，再进命中分区的索引下钻到页面，然后回查项目源码，回答分「Wiki 结论 / 回查过的事实 / 待核验」。索引里没找到时先换词、再全文搜索，之后才下「wiki 没有」的结论。
+- **写（ingest）**：任务收口形成跨会话价值时，Agent 按三级判据写回对应分区、追加当月日志，随后自动 `sync`（只提交本轮自己写的文件，公共层的页面索引由脚本生成并随提交带上；pull --rebase → commit → push；冲突停下交人工，无远端仅本地提交）。当轮说「不用写」即跳过。
 - **学（learn）**：「系统学一下 X」触发学习模块——学习路线、教材式章节、练习、测验；未通过验收不会标记「已掌握」。
 - **检（lint）**：「检查 wiki」触发机械体检 + 语义扫描，问题清单落 `wiki/risks/`。
 
@@ -141,12 +141,12 @@ llm-wiki/
 │   ├── schemas/               # wiki.md（wiki 契约）、分区与共享.md（三级判据）
 │   └── workflows/             # 工作方式、新域落地、多 Agent 记忆
 ├── .agents/skills/            # Skill 正本：llm-wiki-{ingest,query,lint,learn}
-├── scripts/                   # bootstrap.sh、bootstrap.ps1、sync.sh、lint-wiki.py、new-domain.sh
+├── scripts/                   # bootstrap.sh、bootstrap.ps1、sync.sh、build-index.py、lint-wiki.py、new-domain.sh
 ├── tests/                     # Skill 契约测试（单一真源、全局路径约定）
 ├── wiki/
-│   ├── index.md               # 根索引（两级索引的第一级）
+│   ├── index.md               # 根索引（两级索引的第一级，只列分区入口）
 │   ├── projects/<项目>/       # 项目分区，各自维护子 index
-│   ├── concepts/ entities/ operations/ decisions/ risks/
+│   ├── concepts/ entities/ operations/ decisions/ risks/   # 公共层，各带脚本生成的 index.md
 │   ├── learning/              # 学习模块
 │   └── private/               # 私有区（gitignore，物理不出本机）
 ├── inputs/manual/             # 不可复得的口述与截图原料
@@ -192,6 +192,7 @@ git fetch upstream && git merge upstream/main
 - **为什么模式不用配置文件记录？** 与发现约定同理：`~/.llm-wiki` 指向谁、谁就是全局实例，模式即文件系统状态本身，不存在第二份需要保持同步的记录；专项实例因此天然「零全局痕迹」。
 - **为什么私有区用 gitignore 而不是加密或独立分支？** 需要的保证是「不出本机」，gitignore 是达成它最简单且不可能误推的机制；代价（换机不随 git 迁移）与私有区的预期体量相称。
 - **为什么不让团队共写一个 wiki 仓？** 多人实时共写带来 git 冲突与权责不清，历史上同类尝试（共建文档库）多死于此；「每人一仓 + 中心编译」让写入永远单人、合并永远由编译器做。
+- **为什么收口要传路径、索引要脚本生成？** 多个会话共写一个工作区时，按目录提交会把别的会话没写完的文件带进本次提交；手工维护的页面清单则是每次写入都要改、每次查询都要读的热点文件。`sync.sh` 因此只提交传入的路径并加仓库级锁，公共层的页面清单由 `build-index.py` 从页面标题生成，根索引只留分区入口。
 - **为什么 Skill 路径全部绝对化？** 全局挂载后 Agent 的工作目录在任意项目里，相对路径必然解析失败；契约测试禁止裸相对路径回归。
 - **为什么多工具接线不由 bootstrap 自己做，要依赖外部 skill？** 「一份 `AGENTS.md`、一份仓内记忆」是任何仓库都会遇到的通用问题，不是工作台特有的；两处各维护一份脚本必然分叉。bootstrap 只保留工作台特有的发现链、Skill 挂载与 `.worktree-share` 清单，接线和通用 worktree 钩子交给规则仓中的 `agent-memory-setup`，同一脚本也用于其他仓库。
 - **为什么 CLAUDE.md、`.claude/skills/` 入库，`.claude/settings.local.json` 却不入库？** CLAUDE.md 是只含一行 `@AGENTS.md` 的普通文件（v0.3.0 起；此前是相对软链，Windows 未启用 `core.symlinks` 时检出为占位文本），`.claude/skills/` 是相对软链，两者入库后任意 clone 与 worktree 都能解析。后者含本机绝对路径，只由 Claude 原生回读主工作区，不共享。

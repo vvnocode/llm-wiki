@@ -15,4 +15,4 @@ description: 系统学习与教材化整理：学习路线、教材式章节、�
 4. **验收**：`$WIKI/wiki/learning/assessments/` 出题并记录作答结果。**未通过验收不得在任何页面把该主题标记为「已掌握」**；未过的差距写回对应章节的复习点。
 5. 面向输出的讲义、导出教材放 `$WIKI/outputs/learning/`（可再生成，不是 wiki）。
 6. 学习中沉淀出的跨项目通用结论按 ingest skill 的分层判据写入公共层；涉他内容进 `$WIKI/wiki/private/`。
-7. 收口：追加 `$WIKI/wiki/logs/YYYY-MM.md` 条目（动作用 ingest），跑 lint，运行 `$WIKI/scripts/sync.sh "<主题>"`。
+7. 收口：追加 `$WIKI/wiki/logs/YYYY-MM.md` 条目（动作用 ingest），跑 lint，运行 `$WIKI/scripts/sync.sh "<主题>" <路径…>`，只传本轮自己写的文件。
