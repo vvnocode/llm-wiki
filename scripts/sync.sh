@@ -94,9 +94,10 @@ collect_changes() {
 }
 
 # 组装路径数组：--all 时先放默认范围里存在且未被整目录 gitignore 的路径（目录内的忽略项由 git add 自行排除），
-# 再放显式传入的路径（逐个校验在白名单内，且存在于磁盘或是已跟踪文件），最后接上实例登记的排除项。
-# 暂存、判空、提交用同一个数组。
+# 再放显式传入的路径（逐个校验在白名单内，且存在于磁盘或是已跟踪文件；落在实例排除项之下的跳过并提示），
+# 最后接上落在这些路径之下的实例排除项。暂存、判空、提交用同一个数组。
 PATHSPEC=()
+SKIPPED=0
 if [ "$ALL" -eq 1 ]; then
     for d in "${DEFAULT_PATHS[@]}"; do
         if [ -e "$d" ] && ! git check-ignore -q "$d"; then
@@ -123,11 +124,28 @@ for p in ${EXTRA_PATHS[@]+"${EXTRA_PATHS[@]}"}; do
         echo "✗ 路径不存在，也不是已跟踪文件：${p}"
         exit 1
     fi
+    # 落在实例排除项之下（或就是排除项本身）的路径不提交：那些目录由登记它的任务自行提交。
+    # 由脚本自己判断并说明，不交给 git 的排除 pathspec 去静默处理。
+    skip=0
+    for ex in ${CONTENT_EXCLUDES[@]+"${CONTENT_EXCLUDES[@]}"}; do
+        ex="${ex#:(exclude)}"
+        ex="${ex%/}"
+        case "$p" in "$ex"|"$ex"/*) skip=1 ;; esac
+    done
+    if [ "$skip" -eq 1 ]; then
+        echo "· 跳过 ${p}：在实例登记的排除项之下（CONTENT_EXCLUDES），由登记它的任务自行提交"
+        SKIPPED=$((SKIPPED + 1))
+        continue
+    fi
     PATHSPEC+=("$p")
 done
 if [ ${#PATHSPEC[@]} -eq 0 ]; then
     if [ "$ALL" -eq 1 ]; then
         echo "· 无内容目录可提交"
+        exit 0
+    fi
+    if [ "$SKIPPED" -gt 0 ]; then
+        echo "· 传入的路径都在排除项之下，无变更可提交"
         exit 0
     fi
     # 没传路径：不猜哪些是本会话的改动。工作区干净就报无变更，否则列出来让调用方挑。
@@ -142,8 +160,32 @@ if [ ${#PATHSPEC[@]} -eq 0 ]; then
     echo "  用法：sync.sh \"<主题>\" <路径…>；确认上面全是本会话的改动时，可用 sync.sh --all \"<主题>\"。"
     exit 1
 fi
+# 只把落在传入路径之下的排除项交给 git。不在任何传入路径之下的排除项本来就排除不到东西，带上反而出错：
+# git add 按正向路径的公共目录前缀裁剪全部 pathspec，排除项不参与前缀计算却同样被裁；前缀不短于排除项
+# 字符串时，排除项会匹配一切，未跟踪的新文件被排除，而 git add 仍返回 0（git 2.50.1 实测）。
+# 落在某个传入路径之下的排除项与正向路径共用这段前缀，裁剪后仍然正确。
+# 含通配符的排除项没法按前缀判断归属，照旧交给 git。
 # bash 3.2 在 set -u 下展开空数组会报 unbound variable，故用 ${arr[@]+"${arr[@]}"} 写法
-PATHSPEC+=(${CONTENT_EXCLUDES[@]+"${CONTENT_EXCLUDES[@]}"})
+EXCLUDES_IN_SCOPE=()
+for ex in ${CONTENT_EXCLUDES[@]+"${CONTENT_EXCLUDES[@]}"}; do
+    bare="${ex#:(exclude)}"
+    bare="${bare%/}"
+    case "$bare" in
+        *[\*\?\[]*)
+            EXCLUDES_IN_SCOPE+=("$ex")
+            continue
+            ;;
+    esac
+    for p in "${PATHSPEC[@]}"; do
+        case "$bare" in
+            "$p"/*)
+                EXCLUDES_IN_SCOPE+=("$ex")
+                break
+                ;;
+        esac
+    done
+done
+PATHSPEC+=(${EXCLUDES_IN_SCOPE[@]+"${EXCLUDES_IN_SCOPE[@]}"})
 
 # 仓库级锁：同一仓库的多个会话同时收口时排队，暂存到推送这一段不交错。
 # 锁是 git 公共目录下的一个目录（mkdir 原子创建，所有工作区共用）；拿不到就每秒重试，超时退出，不自动破锁。

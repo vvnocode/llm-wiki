@@ -90,6 +90,10 @@ class SyncGuardsTest(RepoFixture):
         self.assertEqual(n, 1, "sync.sh 应有且只有一行 CONTENT_EXCLUDES=(…) 供实例登记排除项")
         script.write_text(new_text, encoding="utf-8")
 
+    def content_leftovers(self) -> dict[str, str]:
+        """工作区里还没提交的改动，不算 set_excludes 改过的 sync.sh 本身（它不在内容白名单内）。"""
+        return {path: status for path, status in porcelain(self.repo).items() if path != "scripts/sync.sh"}
+
     def test_prestaged_skeleton_change_not_swept_into_commit(self) -> None:
         """白名单外的已暂存改动不随 ingest 提交，提交后仍留在暂存区。"""
         write(self.repo / "scripts/x.sh", "echo 2\n")
@@ -171,6 +175,51 @@ class SyncGuardsTest(RepoFixture):
                 self.assertEqual(proc.returncode, 0, msg=proc.stdout + proc.stderr)
                 self.assertIn("无变更", proc.stdout)
                 self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
+
+    def test_new_files_committed_when_registered_exclude_is_elsewhere(self) -> None:
+        """登记了排除项的实例里，按路径传入的新建文件照样要进提交。
+
+        git add 按正向路径的公共目录前缀裁剪全部 pathspec，排除项不参与前缀计算却同样被裁：
+        前缀不短于排除项字符串时，排除项会匹配一切，未跟踪的新文件被排除，而 git add 仍返回 0。
+        排除项 inputs/raw/source-a 长 19 个字符，下面三种传法的公共目录前缀都不短于它。
+        """
+        self.set_excludes("':(exclude)inputs/raw/source-a'")
+        cases = (
+            # （说明，要写的新文件，传给 sync.sh 的路径）
+            ("前缀恰为 19 个字符", "wiki/projects/abcd/new.md", "wiki/projects/abcd/new.md"),
+            ("前缀更长", "wiki/projects/foo-bar-baz/new.md", "wiki/projects/foo-bar-baz/new.md"),
+            ("排除项旁边的新快照目录按目录传入", "inputs/raw/source-b/2026-10/s.json", "inputs/raw/source-b/2026-10"),
+        )
+        for label, new_file, passed in cases:
+            with self.subTest(case=label):
+                write(self.repo / new_file, "new\n")
+                proc = self.run_sync("测试主题", passed)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                self.assertEqual(committed_files(self.repo), [new_file])
+                self.assertEqual(self.content_leftovers(), {})
+
+    def test_path_under_registered_exclude_is_skipped_and_reported(self) -> None:
+        """传入的路径落在排除项之下时不提交并说明原因；同一次传入的其他路径照常提交。"""
+        self.set_excludes("':(exclude)inputs/raw/source-a'")
+        write(self.repo / "inputs/raw/source-a/s.json", '{"v": 2}')
+        write(self.repo / "wiki/index.md", "# index v2\n")
+        proc = self.run_sync("测试主题", "wiki/index.md", "inputs/raw/source-a/s.json")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/index.md"])
+        self.assertIn("排除项", proc.stdout)
+        self.assertIn("inputs/raw/source-a/s.json", proc.stdout)
+        self.assertEqual(self.content_leftovers(), {"inputs/raw/source-a/s.json": " M"})
+
+    def test_only_paths_under_exclude_means_nothing_to_commit(self) -> None:
+        """传入的路径全在排除项之下：不提交，也不当成「没有传入路径」去报错。"""
+        self.set_excludes("':(exclude)inputs/raw/source-a'")
+        write(self.repo / "inputs/raw/source-a/s.json", '{"v": 2}')
+        write(self.repo / "wiki/index.md", "# index 他人在途\n")
+        proc = self.run_sync("测试主题", "inputs/raw/source-a/s.json")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("排除项", proc.stdout)
+        self.assertNotIn("没有传入路径", proc.stdout)
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.init_sha)
 
     def test_lint_runs_before_commit_without_blocking(self) -> None:
         """仓里有 scripts/lint-wiki.py 时，提交前跑一次并打印结果；lint 红不阻断内容提交。"""
