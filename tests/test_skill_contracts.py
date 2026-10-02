@@ -90,6 +90,17 @@ class SkillContractTest(unittest.TestCase):
         for item in ("同义词", "全文搜索", "曾用标题"):
             self.assertIn(item, text, f"query Skill 缺未命中处理：{item}")
 
+    def test_former_title_skipped_when_renamed_for_correction(self) -> None:
+        """「曾用标题」只为普通改名与合并而留：因订正结论而改名的不加，否则被推翻的说法会经索引继续参与选路。
+        ingest Skill 与 schema 都要在「曾用标题：<旧标题>」这条规则的同一行里写明这个例外。"""
+        for rel in (".agents/skills/llm-wiki-ingest/SKILL.md", "docs/schemas/wiki.md"):
+            with self.subTest(file=rel):
+                text = (ROOT / rel).read_text(encoding="utf-8")
+                # 规则句以「曾用标题：<旧标题>」为锚；例外必须与它同行，分开写容易只读到前半句
+                rule = next((line for line in text.splitlines() if "曾用标题：<旧标题>" in line), "")
+                self.assertTrue(rule, f"{rel} 未找到「曾用标题：<旧标题>」规则句")
+                self.assertIn("订正", rule, f"{rel} 须写明因订正结论而改名的不加旧标题")
+
     def test_every_sync_mention_passes_paths(self) -> None:
         """四份 Skill 里凡是让跑 sync.sh 的地方都要带路径：不带路径的调用在有在途改动时会被拒绝。"""
         for name in SKILLS:
