@@ -43,8 +43,8 @@ def porcelain(repo: Path) -> dict[str, str]:
 
 
 def committed_files(repo: Path) -> list[str]:
-    """HEAD 提交涉及的文件清单；关掉改名检测，删除的旧路径与新增的新路径各算一项。"""
-    out = git(repo, "show", "--name-only", "--no-renames", "--format=", "HEAD")
+    """HEAD 提交涉及的文件清单；关掉改名检测，删除的旧路径与新增的新路径各算一项；中文路径原样输出。"""
+    out = git(repo, "-c", "core.quotepath=false", "show", "--name-only", "--no-renames", "--format=", "HEAD")
     return sorted(line for line in out.splitlines() if line)
 
 
@@ -251,6 +251,37 @@ class SyncGuardsTest(RepoFixture):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertNotIn("lint", proc.stdout.lower().replace("lint-wiki", ""))
 
+    def test_only_staged_deletion_passed_does_not_stage_everything(self) -> None:
+        """传入的路径只剩已暂存的删除时，不能再调用 git add。
+
+        已暂存的删除不用再暂存；若照旧把含通配符的排除项交给 git add，而正向路径一个都不剩，
+        只剩排除项的 git add 会把整个工作区暂存，别的会话的在途文件和骨架改动都会被带进提交。
+        """
+        self.set_excludes("':(exclude)inputs/raw/*/tmp'")
+        git(self.repo, "rm", "-q", "inputs/manual/m.md")
+        write(self.repo / "wiki/别的会话的页.md", "# 他人在途\n")
+        write(self.repo / "scripts/x.sh", "echo 2\n")
+        proc = self.run_sync("测试主题", "inputs/manual/m.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["inputs/manual/m.md"])
+        self.assertEqual(self.content_leftovers(), {"wiki/别的会话的页.md": "??", "scripts/x.sh": " M"})
+
+    def test_staged_deleted_directory_with_exclude_under_it_keeps_new_files(self) -> None:
+        """整目录 git rm 后传入该目录、目录下又有登记的排除项时，同一次传入的新文件照样进提交。
+
+        交给 git add 的路径里剔除了已暂存删除的目录，排除项要按剩下的路径重新挑；
+        沿用按全部路径挑出的排除项，它会被新文件路径的公共前缀裁成「匹配一切」，新文件被静默漏掉。
+        排除项之下的删除仍归登记它的任务，不随本次提交，留在暂存区并在输出里列出。
+        """
+        self.set_excludes("':(exclude)inputs/raw/source-a'")
+        git(self.repo, "rm", "-r", "-q", "inputs/raw")
+        write(self.repo / "wiki/projects/abcd/new.md", "new\n")
+        proc = self.run_sync("测试主题", "inputs/raw", "wiki/projects/abcd/new.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/projects/abcd/new.md"])
+        self.assertEqual(self.content_leftovers(), {"inputs/raw/source-a/s.json": "D "})
+        self.assertIn("inputs/raw/source-a/s.json", proc.stdout)
+
 
 class SyncOwnPathsTest(RepoFixture):
     """默认只提交传入的路径：别的会话在同一目录里的在途改动不带走，只列出提醒。"""
@@ -305,6 +336,46 @@ class SyncOwnPathsTest(RepoFixture):
         self.assertEqual(committed_files(self.repo), ["wiki/projects/foo/a.md", "wiki/projects/foo/renamed.md"])
         self.assertNotIn("wiki/projects/foo/a.md", git(self.repo, "ls-files"))
         self.assertEqual(porcelain(self.repo), {})
+
+    def test_staged_rename_old_and_new_paths_can_be_committed(self) -> None:
+        """git mv 之后旧路径既不在磁盘上、也不在暂存区里，但它在 HEAD 里，照样可以传入；提交后暂存区不留残留。"""
+        git(self.repo, "mv", "wiki/projects/foo/a.md", "wiki/projects/foo/renamed.md")
+        proc = self.run_sync("测试主题", "wiki/projects/foo/a.md", "wiki/projects/foo/renamed.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/projects/foo/a.md", "wiki/projects/foo/renamed.md"])
+        self.assertNotIn("wiki/projects/foo/a.md", git(self.repo, "ls-files"))
+        self.assertEqual(porcelain(self.repo), {})
+
+    def test_staged_deletion_can_be_committed(self) -> None:
+        """git rm 之后传被删的路径，提交里就是这条删除。"""
+        git(self.repo, "rm", "-q", "wiki/projects/foo/a.md")
+        proc = self.run_sync("测试主题", "wiki/projects/foo/a.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/projects/foo/a.md"])
+        self.assertEqual(porcelain(self.repo), {})
+
+    def test_staged_directory_deletion_can_be_committed(self) -> None:
+        """整个目录 git rm -r 之后传这个目录，目录下的删除一并提交。"""
+        git(self.repo, "rm", "-r", "-q", "wiki/projects/foo")
+        proc = self.run_sync("测试主题", "wiki/projects/foo")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/projects/foo/a.md"])
+        self.assertEqual(porcelain(self.repo), {})
+
+    def test_staged_old_path_not_passed_is_reported_as_content_change(self) -> None:
+        """git mv 后只传了新路径：提交照常，没传的旧路径删除留在暂存区，
+        要按原样路径报成内容目录里的遗留，提示补传，而不是报成「白名单外」的骨架改动。"""
+        write(self.repo / "wiki/projects/foo/旧页.md", "# 旧页\n")
+        git(self.repo, "add", "wiki/projects/foo/旧页.md")
+        git(self.repo, "commit", "-q", "-m", "加一页")
+        git(self.repo, "mv", "wiki/projects/foo/旧页.md", "wiki/projects/foo/新页.md")
+        proc = self.run_sync("测试主题", "wiki/projects/foo/新页.md")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(committed_files(self.repo), ["wiki/projects/foo/新页.md"])
+        self.assertEqual(porcelain(self.repo), {"wiki/projects/foo/旧页.md": "D "})
+        self.assertIn("wiki/projects/foo/旧页.md", proc.stdout, "遗留路径应按原样列出，才能补传给 sync.sh")
+        self.assertIn("补传", proc.stdout)
+        self.assertNotIn("白名单外", proc.stdout)
 
     def test_missing_untracked_path_is_refused(self) -> None:
         write(self.repo / "wiki/index.md", "# index v2\n")
