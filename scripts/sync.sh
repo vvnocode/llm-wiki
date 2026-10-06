@@ -5,7 +5,8 @@
 #   sync.sh "<主题>" <路径…>        只提交本轮自己写的路径（文件或目录），外加脚本生成的索引
 #   sync.sh --all "<主题>" [路径…]  提交默认范围（wiki、inputs/manual、inputs/common、state、.memory）再加列出的路径
 #   sync.sh "<主题>"                有未提交的内容改动时拒绝并列出；没有改动时报「无变更」
-# 路径须落在内容白名单内；本轮删除或改名的旧路径只要是已跟踪文件，同样可以传。主题缺省为「自动同步」。
+# 路径须落在内容白名单内；本轮删除或改名的旧路径只要是已跟踪文件，同样可以传（用 git rm、git mv 删改的也可以）。
+# 主题缺省为「自动同步」。
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -120,7 +121,10 @@ for p in ${EXTRA_PATHS[@]+"${EXTRA_PATHS[@]}"}; do
         echo "✗ 路径不在内容白名单内：${p}（白名单：${CONTENT_DIRS[*]}）"
         exit 1
     fi
-    if [ ! -e "$p" ] && ! git ls-files --error-unmatch -- "$p" >/dev/null 2>&1; then
+    # 「已跟踪」看三处：磁盘上、暂存区里、HEAD 里。git rm、git mv 会把旧路径从磁盘和暂存区同时拿掉，
+    # 只剩 HEAD 里还有；这种已暂存的删除同样是本轮的改动，可以传入。三处都没有的才是写错的路径。
+    if [ ! -e "$p" ] && ! git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 \
+        && ! git cat-file -e "HEAD:${p}" 2>/dev/null; then
         echo "✗ 路径不存在，也不是已跟踪文件：${p}"
         exit 1
     fi
@@ -166,26 +170,36 @@ fi
 # 落在某个传入路径之下的排除项与正向路径共用这段前缀，裁剪后仍然正确。
 # 含通配符的排除项没法按前缀判断归属，照旧交给 git。
 # bash 3.2 在 set -u 下展开空数组会报 unbound variable，故用 ${arr[@]+"${arr[@]}"} 写法
-EXCLUDES_IN_SCOPE=()
-for ex in ${CONTENT_EXCLUDES[@]+"${CONTENT_EXCLUDES[@]}"}; do
-    bare="${ex#:(exclude)}"
-    bare="${bare%/}"
-    case "$bare" in
-        *[\*\?\[]*)
-            EXCLUDES_IN_SCOPE+=("$ex")
-            continue
-            ;;
-    esac
-    for p in "${PATHSPEC[@]}"; do
+#
+# scoped_excludes <正向路径…>：按给定的正向路径挑出要一起交给 git 的排除项，结果放进 SCOPED_EXCLUDES。
+# 判空与提交按全部正向路径挑；暂存时只按真正交给 git add 的那部分路径重新挑（见 commit_content）。
+SCOPED_EXCLUDES=()
+scoped_excludes() {
+    local ex bare p
+    SCOPED_EXCLUDES=()
+    for ex in ${CONTENT_EXCLUDES[@]+"${CONTENT_EXCLUDES[@]}"}; do
+        bare="${ex#:(exclude)}"
+        bare="${bare%/}"
         case "$bare" in
-            "$p"/*)
-                EXCLUDES_IN_SCOPE+=("$ex")
-                break
+            *[\*\?\[]*)
+                SCOPED_EXCLUDES+=("$ex")
+                continue
                 ;;
         esac
+        for p in "$@"; do
+            case "$bare" in
+                "$p"/*)
+                    SCOPED_EXCLUDES+=("$ex")
+                    break
+                    ;;
+            esac
+        done
     done
-done
-PATHSPEC+=(${EXCLUDES_IN_SCOPE[@]+"${EXCLUDES_IN_SCOPE[@]}"})
+}
+# POSITIVE 只放正向路径（默认范围与传入的路径），PATHSPEC 再接上落在它们之下的排除项
+POSITIVE=("${PATHSPEC[@]}")
+scoped_excludes "${POSITIVE[@]}"
+PATHSPEC+=(${SCOPED_EXCLUDES[@]+"${SCOPED_EXCLUDES[@]}"})
 
 # 仓库级锁：同一仓库的多个会话同时收口时排队，暂存到推送这一段不交错。
 # 锁是 git 公共目录下的一个目录（mkdir 原子创建，所有工作区共用）；拿不到就每秒重试，超时退出，不自动破锁。
@@ -224,11 +238,25 @@ report_left_out() {
 # 返回 0 表示提交了，1 表示无变更；暂存或提交失败直接退出。
 # 本函数总在 if / || 语境里被调用，set -e 在其中不生效，所以关键步骤逐个显式判断。
 commit_content() {
-    local py out generated left
+    local py out generated q
+    local -a add_paths=() staged_content=() staged_skeleton=()
     py=$(command -v python3 || command -v python || true)
-    if ! git add -- "${PATHSPEC[@]}"; then
-        echo "✗ 暂存失败（见上方 git 输出），未提交。被 .gitignore 忽略的路径（如私有区）不要传给 sync.sh。"
-        exit 1
+    # 交给 git add 的只是还能暂存的正向路径：磁盘上没有、暂存区里也没有的（git rm、git mv 留下的已暂存删除）
+    # 再 add 会报 pathspec 不匹配，而它们本来就在暂存区里，判空与提交照旧按 PATHSPEC 带上。
+    # 排除项按这份清单重新挑：沿用按全部路径挑出的排除项时，落在被剔除路径之下的那条会被剩下路径的
+    # 公共前缀裁成「匹配一切」，新文件被静默漏掉（原因见上方 scoped_excludes 前的说明）。
+    for q in "${POSITIVE[@]}"; do
+        if [ -e "$q" ] || git ls-files --error-unmatch -- "$q" >/dev/null 2>&1; then
+            add_paths+=("$q")
+        fi
+    done
+    # 一个可暂存的正向路径都没有时不调用 git add：只剩排除项的 git add 会把整个工作区都暂存
+    if [ ${#add_paths[@]} -gt 0 ]; then
+        scoped_excludes "${add_paths[@]}"
+        if ! git add -- "${add_paths[@]}" ${SCOPED_EXCLUDES[@]+"${SCOPED_EXCLUDES[@]}"}; then
+            echo "✗ 暂存失败（见上方 git 输出），未提交。被 .gitignore 忽略的路径（如私有区）不要传给 sync.sh。"
+            exit 1
+        fi
     fi
     if git diff --cached --quiet -- "${PATHSPEC[@]}"; then
         report_left_out
@@ -259,10 +287,23 @@ commit_content() {
         echo "✗ 提交失败（见上方 git 输出）。本轮改动留在暂存区，处理后重跑 sync.sh。"
         exit 1
     fi
-    left=$(git diff --cached --name-only)
-    if [ -n "$left" ]; then
+    # 提交后暂存区里还剩的改动分两类报。白名单内的多半是本轮 git mv、git rm 留下却没传进来的旧路径
+    # （也可能是别的会话暂存的），属于本轮的补传路径再跑一次即可；白名单外的是骨架改动，要走 worktree。
+    # 用 -z 取路径，中文与含空格的路径按原样列出，可以直接传回 sync.sh。
+    while IFS= read -r -d '' q; do
+        if in_content_dirs "$q"; then
+            staged_content+=("$q")
+        else
+            staged_skeleton+=("$q")
+        fi
+    done < <(git diff --cached --name-only -z)
+    if [ ${#staged_content[@]} -gt 0 ]; then
+        echo "· 内容目录里还有已暂存、但没传给本次提交的改动（多半是 git mv、git rm 留下的旧路径；属于本轮的请补传路径再跑一次）："
+        printf '    %s\n' "${staged_content[@]}"
+    fi
+    if [ ${#staged_skeleton[@]} -gt 0 ]; then
         echo "· 白名单外的已暂存改动未随本次提交（骨架改动请走 worktree）："
-        printf '    %s\n' $left
+        printf '    %s\n' "${staged_skeleton[@]}"
     fi
     return 0
 }
