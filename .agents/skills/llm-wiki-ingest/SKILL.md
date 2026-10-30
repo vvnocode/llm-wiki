@@ -1,6 +1,6 @@
 ---
 name: llm-wiki-ingest
-description: 把新原料编译进个人 LLM Wiki 工作台。用于导入、整理、刷新知识，包括任意项目里排障/分析/学习收口后的默认写入。
+description: 把新原料编译进个人 LLM Wiki 工作台。用于导入、整理、刷新知识，包括任意项目里排障/分析/学习得出可复用结论时的当轮默认写入。
 ---
 
 # LLM Wiki Ingest
