@@ -117,6 +117,29 @@ class SkillContractTest(unittest.TestCase):
                 text = (ROOT / ".agents/skills" / name / "SKILL.md").read_text(encoding="utf-8")
                 self.assertNotIn("open-questions", text)
 
+    def test_ingest_timing_not_bound_to_task_end(self) -> None:
+        """写回时点是「可复用结论成形的当轮」，不绑在任务收口上：绑在收口时，任务还在等用户拍板，写回跟着往后排，
+        用户只好每次手动说「收尾」。规则、schema 与说明文件都不得再把 ingest 时点写成收口；
+        仓根指令与 schema 还须写明结论成形的当轮 ingest、判定不写也在回复里交代。"""
+        # 把写回时点绑在收口上的旧说法；「收口」作为 sync 提交一步的名称不在此列
+        bound_to_end = ("收口后默认", "收口时 ingest", "收口后的默认写入", "任务收口形成", "收口默认写回", "收口后运行")
+        # bootstrap 两份脚本里印着给用户粘贴的全局路由段，与规则仓同一段同步
+        for rel in ("AGENTS.md", "docs/schemas/wiki.md", "docs/schemas/分区与共享.md", "docs/workflows/工作方式.md",
+                    ".agents/skills/llm-wiki-ingest/SKILL.md", "README.md", "SETUP-FOR-AI.md",
+                    "scripts/bootstrap.sh", "scripts/bootstrap.ps1"):
+            with self.subTest(file=rel):
+                text = (ROOT / rel).read_text(encoding="utf-8")
+                for phrase in bound_to_end:
+                    # 用 assertFalse 而非 assertNotIn：后者失败时会把整份文件打印出来
+                    self.assertFalse(phrase in text, f"{rel} 仍把写回时点绑在收口上：{phrase}")
+        for rel in ("AGENTS.md", "docs/schemas/wiki.md"):
+            with self.subTest(file=rel):
+                lines = (ROOT / rel).read_text(encoding="utf-8").splitlines()
+                self.assertTrue(any("结论成形的当轮" in line and "ingest" in line for line in lines),
+                                f"{rel} 须写明可复用结论成形的当轮 ingest")
+                self.assertTrue(any("回复" in line and "不写" in line for line in lines),
+                                f"{rel} 须写明判定不写也在回复里交代")
+
 
 
 class ContentWhitelistTest(unittest.TestCase):
