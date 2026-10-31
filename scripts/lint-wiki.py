@@ -10,8 +10,9 @@
 算入链；来源、核验、断链、禁止来源照查。外部仓来源写 `<登记名>[@<ref>]:<仓内路径>`，不按本仓路径检查；
 裸写的仓内相对路径仍检查是否存在。
 
-提示项（不计入退出码）：「最后核验」首条只写到月份的页。过期核验、两页冲突、缺交叉引用是语义项，由 lint skill
-的模型步骤做，本脚本不判。
+提示项（不计入退出码）：「最后核验」首条只写到月份的页；语义体检欠账，即上一条 lint 日志之后又有几条 ingest /
+query / correct 日志（ops 不计）；risks/ 下「最后核验」首条早于今天超过 30 天的待核验页。天数按本机今天算，
+`--today` 供测试固定日期。事实页的过期核验、两页冲突、缺交叉引用仍是语义项，由 lint skill 的模型步骤做，本脚本不判。
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ import os
 import re
 import sys
 from collections import defaultdict
+from datetime import date
 
 DEFAULT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -51,6 +53,12 @@ TABLE_ROW_RE = re.compile(r"^\|")
 LIST_WITH_LINK_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s+.*\[[^\]]*\]\([^)]+\)")
 HTML_COMMENT_RE = re.compile(r"^<!--.*-->$")
 VERIFY_MONTH_ONLY_RE = re.compile(r"^\d{4}-\d{2}$")
+VERIFY_FULL_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+# 欠账提示：这几种日志表示写过 wiki，之后应跟一条 lint 日志；ops（合并、推送等）不计
+WRITE_ACTIONS = ("ingest", "query", "correct")
+# 待核验页「最后核验」首条早于今天超过这个天数，算长期未核验
+RISK_STALE_DAYS = 30
 
 
 def pages(wiki: str) -> list[str]:
@@ -174,11 +182,81 @@ def first_verify_token(text: str) -> str | None:
     return None
 
 
-def hints(root: str) -> list[str]:
-    """提示项：不算机械问题、不改退出码，只在输出末尾列出。目前一项：最后核验只写到月份。"""
+def log_entries(wiki: str) -> list[tuple[date, str]]:
+    """全部月日志里格式合法的条目，按发生先后排成 (日期, 动作)。
+
+    月日志约定新条目追加在顶部，同一天内文件里越靠上越新：每个文件先倒序，再按日期稳定排序，
+    同一天的先后因此保留。格式不合法的行由 lint() 报，这里跳过。
+    """
+    logs_dir = os.path.join(wiki, "logs")
+    if not os.path.isdir(logs_dir):
+        return []
+    out: list[tuple[date, str]] = []
+    for fn in sorted(os.listdir(logs_dir)):
+        if not re.fullmatch(r"\d{4}-\d{2}\.md", fn):
+            continue
+        rows: list[tuple[date, str]] = []
+        for line in open(os.path.join(logs_dir, fn), encoding="utf-8"):
+            m = ENTRY_RE.match(line.rstrip())
+            if not m:
+                continue
+            try:
+                rows.append((date(int(m.group(1)), int(m.group(2)), int(m.group(3))), m.group(4)))
+            except ValueError:  # 2026-02-30 之类不存在的日期
+                continue
+        out.extend(reversed(rows))
+    out.sort(key=lambda row: row[0])
+    return out
+
+
+def lint_debt_hint(wiki: str, today: date) -> str | None:
+    """语义体检欠账：上一条 lint 日志之后又有几条写入类日志（WRITE_ACTIONS）。没有欠账返回 None。"""
+    entries = log_entries(wiki)
+    lint_at = [i for i, (_d, action) in enumerate(entries) if action == "lint"]
+    after = entries[lint_at[-1] + 1 :] if lint_at else entries
+    writes = sum(1 for _d, action in after if action in WRITE_ACTIONS)
+    if not writes:
+        return None
+    kinds = " / ".join(WRITE_ACTIONS)
+    if not lint_at:
+        return f"语义体检欠账：还没有 lint 日志，已有 {writes} 条 {kinds} 日志"
+    last = entries[lint_at[-1]][0]
+    return f"语义体检欠账：上一条 lint 日志在 {last.isoformat()}（{(today - last).days} 天前），其后 {writes} 条 {kinds} 日志"
+
+
+def stale_risk_hint(texts: dict[str, str], today: date) -> str | None:
+    """待核验账龄：risks/ 下「最后核验」首条早于今天超过 RISK_STALE_DAYS 天的页汇总成一条，列最久的三页。
+
+    只写到月份的页不算账龄，由「最后核验只到月份」一条提示。没有超期页返回 None。
+    """
+    risk_pages = [p for p in texts if p.startswith("risks/") and is_content_page(p, texts[p])]
+    stale: list[tuple[date, str]] = []
+    for p in risk_pages:
+        stamp = first_verify_token(texts[p])
+        if not stamp or not VERIFY_FULL_DATE_RE.match(stamp):
+            continue
+        try:
+            verified = date.fromisoformat(stamp)
+        except ValueError:  # 形如日期但不存在
+            continue
+        if (today - verified).days > RISK_STALE_DAYS:
+            stale.append((verified, p))
+    if not stale:
+        return None
+    stale.sort()
+    oldest = "、".join(f"{p}（{d.isoformat()}）" for d, p in stale[:3])
+    return f"待核验超过 {RISK_STALE_DAYS} 天未核验：{len(stale)} / {len(risk_pages)} 页，最久的是 {oldest}"
+
+
+def hints(root: str, today: date | None = None) -> list[str]:
+    """提示项：不算机械问题、不改退出码，只在输出末尾列出。
+
+    三项：最后核验只写到月份的页；语义体检欠账；待核验页超期未核验。today 为空时取本机今天。
+    """
     wiki = os.path.join(root, "wiki")
     if not os.path.isdir(wiki):
         return []
+    today = today or date.today()
     out: list[str] = []
     texts = page_texts(wiki)
     for p in sorted(texts):
@@ -187,6 +265,9 @@ def hints(root: str) -> list[str]:
         stamp = first_verify_token(texts[p])
         if stamp and VERIFY_MONTH_ONLY_RE.match(stamp):
             out.append(f"最后核验只到月份（需 YYYY-MM-DD）：{p}")
+    for tip in (lint_debt_hint(wiki, today), stale_risk_hint(texts, today)):
+        if tip:
+            out.append(tip)
     return out
 
 
@@ -321,6 +402,11 @@ def main() -> int:
         default=DEFAULT_ROOT,
         help="仓库根（测试可指向临时夹具）",
     )
+    parser.add_argument(
+        "--today",
+        type=date.fromisoformat,
+        help="提示项里的天数按这一天算（YYYY-MM-DD，测试用；默认本机今天）",
+    )
     args = parser.parse_args()
     root = os.path.abspath(args.root)
     wiki = os.path.join(root, "wiki")
@@ -329,7 +415,7 @@ def main() -> int:
     if os.path.isdir(wiki):
         texts = page_texts(wiki)
         content_n = len([p for p in texts if is_content_page(p, texts[p])])
-    tips = hints(root)
+    tips = hints(root, args.today)
     if not issues:
         print(f"wiki lint：{content_n} 页，未发现机械问题")
     else:

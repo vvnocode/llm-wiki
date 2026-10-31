@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""lint-wiki.py 的夹具单测：现有每类机械检查各一红一绿，加两级索引、子索引规则、私有区豁免与外部来源前缀。
+"""lint-wiki.py 的夹具单测：现有每类机械检查各一红一绿，加两级索引、子索引规则、私有区豁免、外部来源前缀与三条提示项。
 
 夹具在临时目录里搭最小 wiki，用 `lint-wiki.py --root` 实跑脚本；不拿「当前仓库碰巧是绿的」当唯一证明。
 最后一个用例对当前仓库跑 lint：模板里是种子 wiki，实例里就是 lint 门禁。
@@ -19,10 +19,10 @@ LINT = ROOT / "scripts" / "lint-wiki.py"
 PAGE_TAIL = "\n## 来源\n\n- `inputs/manual/fact.md`：本页结论。\n\n## 最后核验\n\n- 2026-08-20（回读原料）\n"
 
 
-def run_lint(root: Path) -> subprocess.CompletedProcess[str]:
-    """在指定仓库根实跑机械 lint，返回完整进程结果（退出码 1 表示有问题）。"""
+def run_lint(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """在指定仓库根实跑机械 lint，返回完整进程结果（退出码 1 表示有问题）；args 追加到命令行，如 `--today`。"""
     return subprocess.run(
-        [sys.executable, str(LINT), "--root", str(root)],
+        [sys.executable, str(LINT), "--root", str(root), *args],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -37,10 +37,11 @@ def write(root: Path, rel: str, content: str) -> None:
 
 
 def minimal_wiki(root: Path) -> None:
-    """刚好能通过机械 lint 的最小 wiki：根索引、根 log、一个月日志、一张事实页与它的原料。"""
+    """刚好能通过机械 lint、也没有提示的最小 wiki：根索引、根 log、一个月日志（ingest 之后跟着一条 lint，
+    新条目在上）、一张事实页与它的原料。"""
     write(root, "wiki/index.md", "# Wiki\n\n- [主题](concepts/topic.md)\n- [日志](log.md)\n")
     write(root, "wiki/log.md", "# 日志\n\n- [2026-08](logs/2026-08.md)\n")
-    write(root, "wiki/logs/2026-08.md", "# 2026-08\n\n## [2026-08-20] ingest | 建立主题\n")
+    write(root, "wiki/logs/2026-08.md", "# 2026-08\n\n## [2026-08-20] lint | 建立主题后的检查\n\n## [2026-08-20] ingest | 建立主题\n")
     write(root, "wiki/concepts/topic.md", "# 主题\n\n事实。\n" + PAGE_TAIL)
     write(root, "inputs/manual/fact.md", "原料\n")
 
@@ -265,6 +266,97 @@ class VerifyDateHint(Fixture):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("断链", proc.stdout)
         self.assertIn("提示：最后核验只到月份", proc.stdout)
+
+
+def add_risk_pages(root: Path, verified: dict[str, str]) -> None:
+    """在夹具里加待核验分区：risks/index.md 挂进根索引，每页一张待核验表，「最后核验」首条取 verified[页名]。"""
+    write(root, "wiki/index.md", "# Wiki\n\n- [主题](concepts/topic.md)\n- [待核验](risks/index.md)\n- [日志](log.md)\n")
+    write(root, "wiki/risks/index.md", "# 待核验\n\n" + "".join(f"- [待核验：{n}]({n}.md)\n" for n in verified))
+    for name, stamp in verified.items():
+        write(
+            root,
+            f"wiki/risks/{name}.md",
+            f"# 待核验：{name}\n\n| 问题 | 现状 | 闭环方式 |\n|---|---|---|\n| 问 | 未查 | 回读原料 |\n"
+            f"\n## 来源\n\n- `inputs/manual/fact.md`：现状。\n\n## 最后核验\n\n- {stamp}（回读原料）\n",
+        )
+
+
+class DatedHintCase(Fixture):
+    """账龄类提示的公共步骤：按 `--today` 固定日期跑 lint；提示不算机械问题，退出码必须是 0。"""
+
+    def lint_on(self, today: str) -> str:
+        proc = run_lint(self.root, "--today", today)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        return proc.stdout
+
+
+class LintDebtHint(DatedHintCase):
+    """语义体检欠账：上一条 lint 日志之后又有 ingest / query / correct 日志就提示；ops 不计。
+
+    月日志新条目追加在顶部，同一天内越靠上越新。
+    """
+
+    def test_lint_after_last_write_no_hint(self) -> None:
+        # 夹具的月日志里 lint 写在同日 ingest 的上面，即写入之后做过体检
+        self.assertNotIn("语义体检欠账", self.lint_on("2026-08-31"))
+
+    def test_writes_after_last_lint_counted_without_ops(self) -> None:
+        write(
+            self.root,
+            "wiki/logs/2026-08.md",
+            "# 2026-08\n\n## [2026-08-28] ops | 合入分支\n\n## [2026-08-27] correct | 订正\n\n"
+            "## [2026-08-26] query | 问答写回\n\n## [2026-08-25] ingest | 新主题\n\n## [2026-08-20] lint | 检查\n",
+        )
+        self.assertIn(
+            "提示：语义体检欠账：上一条 lint 日志在 2026-08-20（11 天前），其后 3 条 ingest / query / correct 日志",
+            self.lint_on("2026-08-31"),
+        )
+
+    def test_same_day_write_above_lint_counted(self) -> None:
+        write(self.root, "wiki/logs/2026-08.md", "# 2026-08\n\n## [2026-08-20] ingest | 体检之后又写\n\n## [2026-08-20] lint | 检查\n")
+        self.assertIn("其后 1 条 ingest / query / correct 日志", self.lint_on("2026-08-20"))
+
+    def test_writes_in_later_month_counted(self) -> None:
+        write(self.root, "wiki/logs/2026-09.md", "# 2026-09\n\n## [2026-09-02] ingest | 下个月的写入\n")
+        self.assertIn("上一条 lint 日志在 2026-08-20（16 天前），其后 1 条", self.lint_on("2026-09-05"))
+
+    def test_no_lint_entry_at_all(self) -> None:
+        write(self.root, "wiki/logs/2026-08.md", "# 2026-08\n\n## [2026-08-20] ingest | 建立主题\n")
+        self.assertIn(
+            "提示：语义体检欠账：还没有 lint 日志，已有 1 条 ingest / query / correct 日志",
+            self.lint_on("2026-08-31"),
+        )
+
+
+class StaleRiskHint(DatedHintCase):
+    """待核验账龄：risks/ 下「最后核验」首条早于今天超过 30 天的页汇总成一条提示，列最久的三页。"""
+
+    def test_stale_risk_reported(self) -> None:
+        add_risk_pages(self.root, {"q": "2026-08-01"})
+        self.assertIn("提示：待核验超过 30 天未核验：1 / 1 页，最久的是 risks/q.md（2026-08-01）", self.lint_on("2026-09-15"))
+
+    def test_exactly_30_days_not_reported(self) -> None:
+        add_risk_pages(self.root, {"q": "2026-08-16"})
+        self.assertNotIn("待核验超过", self.lint_on("2026-09-15"))
+
+    def test_oldest_three_listed_in_order(self) -> None:
+        add_risk_pages(self.root, {"a": "2026-08-10", "b": "2026-07-01", "c": "2026-08-01", "d": "2026-07-15", "e": "2026-09-10"})
+        out = self.lint_on("2026-09-15")
+        self.assertIn(
+            "待核验超过 30 天未核验：4 / 5 页，最久的是 risks/b.md（2026-07-01）、risks/d.md（2026-07-15）、risks/c.md（2026-08-01）",
+            out,
+        )
+        self.assertNotIn("risks/a.md（", out)
+
+    def test_month_only_risk_not_aged(self) -> None:
+        add_risk_pages(self.root, {"q": "2026-07"})
+        out = self.lint_on("2026-09-15")
+        self.assertIn("提示：最后核验只到月份（需 YYYY-MM-DD）：risks/q.md", out)
+        self.assertNotIn("待核验超过", out)
+
+    def test_old_concept_page_not_aged(self) -> None:
+        # 只看 risks/：夹具里的事实页 2026-08-20 核验，到这天早已超过 30 天，也不进这条提示
+        self.assertNotIn("待核验超过", self.lint_on("2027-01-01"))
 
 
 class CurrentWiki(unittest.TestCase):
