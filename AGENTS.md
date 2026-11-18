@@ -57,7 +57,7 @@
 
 **何时必须建短期分支**：内容目录——`wiki/`、`inputs/`、`outputs/`、`state/`、`.memory/`——的写入直接在 `main` 提交，`sync.sh` 即此路径（只提交传入的路径，免得卷走并行会话的在途改动；`--all` 才按目录带 `wiki/`、`inputs/manual/`、`inputs/common/`、`state/`、`.memory/`，成稿与采集快照任何时候都须显式传入）；**白名单之外的任何文件改动，不论大小，一律先建 worktree**（模板升级 merge 按上一段执行，不属此列）。按改动落点而非任务类型判定：枚举「哪些任务要建」是开放清单，会随功能新增而漏；新增功能必然改动白名单外的文件，天然落入 worktree。一次改动同时涉及内容与骨架的，整体走 worktree。实例可在实例段**收紧**白名单（如要求某类产出也走 worktree），两段不一致时按收紧者执行；收紧只改「是否建 worktree」，不得把内容产出改成需用户确认。
 
-**合并确认门与一任务一合**：内容目录的 worktree（跨会话迭代的长任务才需要）验证后由 agent 自行 `--no-ff` 合一次并删除，**无需用户确认**；白名单之外的骨架改动（改框架、加板块、改约束、加改脚本与模板）做完停下报告——改了哪些文件、验证结果、合入目标——**等用户确认**后再合入并删除，未经确认不得合入或删除。**一个任务只合一次**：改口吻、补数据、出 HTML 这类返工都提交在同一分支，同一任务跨会话沿用原 worktree，不得每轮返工各合一次（2026-09-03 教训：一份月报在实例 `main` 留下五个 merge 节点）。
+**合并确认门与一任务一合**：内容目录的 worktree（跨会话迭代的长任务才需要）验证后由 agent 自行 `--no-ff` 合一次并删除，**无需用户确认**；白名单之外的骨架改动（改框架、加板块、改约束、加改脚本与模板）做完停下报告——改了哪些文件、验证结果、合入目标——**等用户确认**后再合入并删除，未经确认不得合入或删除。**一个任务只合一次**：改口吻、补数据、出 HTML 这类返工都提交在同一分支，同一任务跨会话沿用原 worktree，不得每轮返工各合一次，否则同一任务会在 `main` 上留下多个 merge 节点。
 
 **一个 worktree 一个合入目标**：worktree 从这次改动要合回的分支拉出，验证后 `--no-ff` 合回同一分支，不并行合入多条长期分支。维护者合一仓的骨架改动以 `template` 为基线且只合回 `template`，进入 `main` 走版本发布后的升级 merge（合一仓的 `main` 等同第一个实例，与其他实例同一同步方式）；仅实例侧配置才以 `main` 为基线。发布一律用 `scripts/release.sh`（先跑 release-check 敏感扫描再推全部发布远端，配套 pre-push hook 见 README「模板维护者」节），不得手工 `git push` 发布远端。合并在哪执行，看目标分支是否已被根工作区检出：已检出（实例仓合回 `main`）时，直接在根工作区 `merge --no-ff` 任务分支，不切换分支——同一分支不能同时被两个工作区检出，在任务 worktree 里 checkout `main` 会失败；未被检出（合一仓合回 `template`）时，在任务 worktree 里 checkout 目标分支后 merge，任务分支也在该 worktree 里 `git branch -d` 后再删 worktree（根工作区 HEAD 是 `main`，在那里 `-d` 会判为未合入）。**根工作区始终留在 `main`**，不得为合并切换根工作区——会打断其他会话的内容写入；在根工作区 merge 遇到冲突或被本地改动拦下时，停下交人工，不得 stash、reset 他人在途改动。根工作区由多个会话共用，任何时候都不得用 `stash`、`reset --hard`、`checkout -- .`、`restore`、`clean` 清场：这些命令会抹掉别的会话尚未提交的内容。
 
@@ -75,7 +75,7 @@
 
 ## 多工具入口
 
-`AGENTS.md` 是唯一指令正本；`CLAUDE.md` 是入库的普通文件，只含一行 `@AGENTS.md` 引用（v0.3.0 起取代相对软链：软链在 Windows 默认 `core.symlinks=false` 下检出后是只写着 `AGENTS.md` 的文本文件）。`.claude/skills/`、`.codex/skills/` 兼容链接以相对软链入库（v0.2.4 起，保证 worktree 内可见），bootstrap 只在缺失或 Windows 无 symlink 权限时按平台补建（junction/副本）。项目级 Skill 的 canonical 位于 `.agents/skills/`；全局挂载由 bootstrap 链到 `~/.agents/skills/`、`~/.claude/skills/` 与 `~/.codex/skills/` 三处发现根（`~/.agents/skills/` 是跨工具约定俗成位，Claude 与 Codex 不扫它、各认自己的目录）。多工具入口与仓内记忆的接线由 bootstrap 委托公开 skill `agent-memory-setup` 完成（未装先装到三处发现根），本仓只保留 worktree 共享钩子等特有部分，见 `docs/workflows/记忆与多Agent.md`。
+`AGENTS.md` 是唯一指令正本；`CLAUDE.md` 是入库的普通文件，只含一行 `@AGENTS.md` 引用（不用相对软链：软链在 Windows 默认 `core.symlinks=false` 下检出后是只写着 `AGENTS.md` 的文本文件）。`.claude/skills/`、`.codex/skills/` 兼容链接以相对软链入库（保证 worktree 内可见），bootstrap 只在缺失或 Windows 无 symlink 权限时按平台补建（junction/副本）。项目级 Skill 的 canonical 位于 `.agents/skills/`；全局挂载由 bootstrap 链到 `~/.agents/skills/`、`~/.claude/skills/` 与 `~/.codex/skills/` 三处发现根（`~/.agents/skills/` 是跨工具约定俗成位，Claude 与 Codex 不扫它、各认自己的目录）。多工具入口与仓内记忆的接线由 bootstrap 委托公开 skill `agent-memory-setup` 完成（未装先装到三处发现根），本仓只保留 worktree 共享钩子等特有部分，见 `docs/workflows/记忆与多Agent.md`。
 
 ## 语言与文风
 
